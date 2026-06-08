@@ -1032,19 +1032,18 @@ function escHtml(s){
 function trackHTML(track, index, listId){
   const iL = liked.some(l => l.id === track.id);
   const iP = currentTrack && currentTrack.id === track.id;
-  // Use index+listId only in onclick — no JSON serialization in HTML attrs
   return '<div class="track-item' + (iP?' playing':'') + '" id="ti-' + track.id + '"'
-    + ' onclick="playFromList(' + index + ','' + listId + '')">'
+    + ' onclick="playFromList(' + index + ',\'' + listId + '\'")>'
     + '<div class="playing-dot"></div>'
     + (iP ? '<div class="eq-bars"><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div></div>' : '')
-    + '<img class="track-thumb" src="' + escHtml(track.thumb||'') + '" alt="" loading="lazy" onerror="this.src=''"/>'
+    + '<img class="track-thumb" src="' + escHtml(track.thumb||'') + '" alt="" loading="lazy" onerror="this.src=\'\'"/>'
     + '<div class="track-info">'
     + '<div class="track-title">' + escHtml(track.title) + '</div>'
     + '<div class="track-artist">' + escHtml(track.artist) + '</div>'
     + '</div>'
     + '<div class="track-actions" onclick="event.stopPropagation()">'
-    + '<button class="track-btn" onclick="likeByIndex(' + index + ','' + listId + '')">' + (iL?'❤️':'🤍') + '</button>'
-    + '<button class="track-btn" onclick="dlByIndex(' + index + ','' + listId + '')">⬇️</button>'
+    + '<button class="track-btn" onclick="likeByIndex(' + index + ',\'' + listId + '\')">' + (iL?'❤️':'🤍') + '</button>'
+    + '<button class="track-btn" onclick="dlByIndex(' + index + ',\'' + listId + '\')">⬇️</button>'
     + '</div>'
     + '</div>';
 }
