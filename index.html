@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#1A0A2E"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Unbound Music"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <link rel="manifest" href="manifest.json"/>
+  <title>Unbound Music</title>
+  <style>
+    /* ── TOKENS ── */
+    :root{
+      --bb:#7EC8E3;--pk:#FF2D78;--ind:#1A0A2E;
+      --ind-m:#2D1B4E;--ind-l:#3D2660;
+      --txt:#F0E6FF;--muted:#9B86BD;--card:#231242;
+    }
+    /* ── RESET ── */
+    *{margin:0;padding:0;box-sizing:border-box;
+      -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;}
+    html,body{height:100%;overflow:hidden;
+      font-family:'Segoe UI',system-ui,sans-serif;
+      background:var(--ind);color:var(--txt);}
+
+    /* ── LAYOUT SHELL ──
+       Fixed shell: topbar + tabs fixed at top, bottom-nav fixed at bottom,
+       content scrolls in between. No sticky-inside-fixed hacks.         */
+    #shell-top{
+      position:fixed;top:0;left:0;right:0;z-index:100;
+      background:var(--ind-m);
+      border-bottom:1px solid var(--ind-l);}
+    #topbar{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:14px 16px 8px;}
+    #topbar h1{
+      font-size:21px;font-weight:800;
+      background:linear-gradient(90deg,var(--bb),var(--pk));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      background-clip:text;}
+    #greeting-txt{font-size:11px;color:var(--muted);margin-top:1px;}
+    .topbar-right{display:flex;gap:8px;}
+    .icon-btn{
+      background:var(--ind-l);border:none;border-radius:50%;
+      width:36px;height:36px;display:flex;align-items:center;
+      justify-content:center;font-size:16px;cursor:pointer;color:var(--txt);}
+
+    /* horizontal tab strip */
+    #tab-strip{
+      display:flex;gap:8px;padding:0 12px 10px;
+      overflow-x:auto;scrollbar-width:none;}
+    #tab-strip::-webkit-scrollbar{display:none;}
+    .tab{
+      padding:6px 15px;border-radius:20px;
+      border:1.5px solid var(--ind-l);background:transparent;
+      color:var(--muted);font-size:12px;font-weight:600;
+      cursor:pointer;white-space:nowrap;flex-shrink:0;
+      transition:background .15s,color .15s,border-color .15s;}
+    .tab.active{
+      background:linear-gradient(135deg,var(--pk),var(--ind-l));
+      border-color:var(--pk);color:#fff;}
+
+    /* ── SCROLL AREA ── */
+    #content{
+      position:fixed;left:0;right:0;overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+      top:108px;bottom:136px;}
+    /* height set by JS after measuring shell-top & bottom-nav */
+
+    /* ── VIEWS ── */
+    .view{display:none;padding-bottom:8px;}
+    .view.active{display:block;}
+
+    /* search bar inside search-results-view */
+    .search-wrap{padding:10px 16px;position:relative;}
+    .search-wrap input{
+      width:100%;background:var(--ind-l);
+      border:1.5px solid transparent;border-radius:30px;
+      padding:11px 48px 11px 18px;color:var(--txt);
+      font-size:15px;outline:none;transition:border .2s;}
+    .search-wrap input:focus{border-color:var(--pk);}
+    .search-wrap input::placeholder{color:var(--muted);}
+    .search-btn{
+      position:absolute;right:24px;top:50%;transform:translateY(-50%);
+      background:linear-gradient(135deg,var(--pk),var(--bb));
+      border:none;border-radius:50%;width:34px;height:34px;
+      cursor:pointer;display:flex;align-items:center;
+      justify-content:center;font-size:15px;}
+
+    /* shared section */
+    .section{padding:8px 16px;}
+    .section-title{font-size:15px;font-weight:700;margin-bottom:10px;color:var(--bb);}
+    .section-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+    .see-all{font-size:12px;color:var(--pk);cursor:pointer;font-weight:600;}
+
+    /* track list */
+    .track-list{display:flex;flex-direction:column;gap:6px;}
+    .track-item{
+      display:flex;align-items:center;gap:12px;
+      background:var(--card);border-radius:12px;padding:10px 12px;
+      cursor:pointer;border:1px solid transparent;
+      position:relative;overflow:hidden;
+      animation:fadeIn .18s ease;}
+    .track-item:active{opacity:.8;}
+    .track-item.playing{
+      border-color:var(--pk);
+      background:linear-gradient(90deg,var(--ind-m),var(--card));}
+    .playing-dot{
+      display:none;position:absolute;left:0;top:0;bottom:0;width:3px;
+      background:linear-gradient(180deg,var(--pk),var(--bb));
+      border-radius:0 3px 3px 0;}
+    .track-item.playing .playing-dot{display:block;}
+    .eq-bars{display:none;align-items:flex-end;gap:2px;height:20px;flex-shrink:0;}
+    .track-item.playing .eq-bars{display:flex;}
+    .eq-bar{width:3px;background:var(--pk);border-radius:2px;animation:eq .8s ease-in-out infinite;}
+    .eq-bar:nth-child(1){height:6px;animation-delay:0s;}
+    .eq-bar:nth-child(2){height:14px;animation-delay:.15s;}
+    .eq-bar:nth-child(3){height:10px;animation-delay:.3s;}
+    .eq-bar:nth-child(4){height:16px;animation-delay:.1s;}
+    @keyframes eq{0%,100%{transform:scaleY(1);}50%{transform:scaleY(.4);}}
+    .track-thumb{
+      width:52px;height:52px;border-radius:8px;object-fit:cover;
+      flex-shrink:0;background:var(--ind-l);}
+    .track-info{flex:1;min-width:0;}
+    .track-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .track-artist{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .track-actions{display:flex;gap:4px;flex-shrink:0;}
+    .track-btn{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;border-radius:6px;}
+    .track-btn:active{color:var(--pk);}
+
+    /* loading / empty */
+    .loading{text-align:center;padding:40px;color:var(--muted);}
+    .spinner{width:32px;height:32px;border:3px solid var(--ind-l);border-top-color:var(--pk);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
+    .empty-state .ico{font-size:38px;margin-bottom:10px;}
+    .empty-state p{font-size:13px;line-height:1.5;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── BOTTOM NAV ── */
+    #bottom-nav{
+      position:fixed;bottom:0;left:0;right:0;z-index:200;
+      background:var(--ind-m);border-top:1px solid var(--ind-l);
+      display:flex;justify-content:space-around;
+      padding:6px 0 10px;}
+    .nav-item{
+      background:none;border:none;color:var(--muted);
+      display:flex;flex-direction:column;align-items:center;
+      gap:3px;font-size:10px;font-weight:600;cursor:pointer;
+      padding:4px 12px;border-radius:10px;transition:color .15s;}
+    .nav-item span:first-child{font-size:20px;}
+    .nav-item.active{color:var(--pk);}
+
+    /* ── MINI PLAYER ── */
+    #mini-player{
+      position:fixed;left:8px;right:8px;z-index:150;
+      background:linear-gradient(135deg,var(--ind-m),var(--ind-l));
+      border-radius:16px;border:1px solid rgba(255,45,120,.35);
+      padding:10px 14px;box-shadow:0 -2px 24px rgba(0,0,0,.5);
+      cursor:pointer;display:none;}
+    #mini-player.visible{display:block;}
+    .mp-row{display:flex;align-items:center;gap:10px;}
+    .mp-thumb{width:42px;height:42px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--ind-l);}
+    .mp-info{flex:1;min-width:0;}
+    .mp-title{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .mp-artist{font-size:11px;color:var(--muted);}
+    .mp-controls{display:flex;gap:4px;align-items:center;flex-shrink:0;}
+    .mp-btn{background:none;border:none;color:var(--txt);font-size:22px;cursor:pointer;padding:4px;}
+    .mp-btn.play{color:var(--pk);font-size:26px;}
+    .mp-progress{height:2px;background:var(--ind-l);border-radius:2px;margin-top:6px;overflow:hidden;}
+    .mp-progress-fill{height:100%;background:linear-gradient(90deg,var(--pk),var(--bb));border-radius:2px;width:0%;transition:width .5s linear;}
+
+    /* ── FULL PLAYER ── */
+    #full-player{
+      position:fixed;inset:0;z-index:500;
+      transform:translateY(100%);
+      transition:transform .32s cubic-bezier(.4,0,.2,1);
+      display:flex;flex-direction:column;background:var(--ind);
+      will-change:transform;
+      pointer-events:none;}
+    #full-player.open{transform:translateY(0);pointer-events:auto;}
+    #fp-bg{
+      position:absolute;inset:0;z-index:0;
+      background-size:cover;background-position:center;
+      filter:blur(40px) brightness(.28) saturate(1.6);
+      transform:scale(1.15);transition:background-image .4s;}
+    #fp-bg::after{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(180deg,rgba(26,10,46,.4),rgba(26,10,46,.96));}
+    .fp-content{
+      position:relative;z-index:1;
+      display:flex;flex-direction:column;
+      height:100%;padding:0 24px 24px;overflow:hidden;}
+    .fp-handle-wrap{padding:12px 0 4px;display:flex;justify-content:center;}
+    .fp-handle{width:40px;height:4px;background:rgba(255,255,255,.2);border-radius:4px;}
+    .fp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    .fp-header-title{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);}
+    .fp-close,.fp-menu-btn{background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:4px;line-height:1;}
+    .fp-art-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;}
+    #fp-art{
+      width:min(260px,calc(100vw - 80px));
+      height:min(260px,calc(100vw - 80px));
+      border-radius:20px;object-fit:cover;background:var(--ind-m);
+      box-shadow:0 20px 60px rgba(0,0,0,.7);
+      transition:transform .3s,box-shadow .3s;}
+    #fp-art.big{transform:scale(1.04);box-shadow:0 28px 80px rgba(255,45,120,.3);}
+    .fp-info{display:flex;align-items:center;justify-content:space-between;margin-top:16px;}
+    .fp-info-left{flex:1;min-width:0;}
+    #fp-title{font-size:19px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;}
+    #fp-artist{font-size:13px;color:var(--muted);margin-top:4px;}
+    .fp-like-btn{background:none;border:none;font-size:26px;cursor:pointer;padding:4px;flex-shrink:0;}
+    .fp-progress-wrap{margin-top:16px;}
+    .fp-progress-bar{
+      height:4px;background:rgba(255,255,255,.15);border-radius:4px;
+      position:relative;cursor:pointer;}
+    .fp-progress-fill{height:100%;background:linear-gradient(90deg,var(--pk),var(--bb));border-radius:4px;width:0%;pointer-events:none;}
+    .fp-progress-knob{
+      position:absolute;top:50%;width:14px;height:14px;
+      background:#fff;border-radius:50%;
+      transform:translateY(-50%) translateX(-50%);left:0%;
+      box-shadow:0 0 8px rgba(255,45,120,.6);
+      pointer-events:none;opacity:0;transition:opacity .2s;}
+    .fp-progress-bar:active .fp-progress-knob{opacity:1;}
+    .fp-time-row{display:flex;justify-content:space-between;margin-top:5px;}
+    .fp-time{font-size:11px;color:var(--muted);}
+    .fp-controls{
+      display:flex;align-items:center;justify-content:space-between;
+      margin-top:20px;}
+    .fp-ctrl-btn{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:8px;}
+    .fp-ctrl-btn.on{color:var(--pk);}
+    .fp-play-pause{
+      background:linear-gradient(135deg,var(--pk),var(--bb));
+      border:none;border-radius:50%;width:62px;height:62px;
+      font-size:26px;cursor:pointer;color:#fff;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 6px 24px rgba(255,45,120,.4);}
+    .fp-extra{display:flex;justify-content:space-around;margin-top:16px;}
+    .fp-extra-btn{
+      background:none;border:none;color:var(--muted);
+      font-size:11px;cursor:pointer;
+      display:flex;flex-direction:column;align-items:center;gap:3px;}
+    .fp-extra-btn .ei{font-size:20px;}
+    .fp-volume{display:flex;align-items:center;gap:10px;margin-top:14px;}
+    .fp-vol-icon{font-size:16px;color:var(--muted);}
+    .fp-vol-bar{
+      flex:1;height:4px;background:rgba(255,255,255,.15);
+      border-radius:4px;cursor:pointer;position:relative;}
+    .fp-vol-fill{height:100%;background:linear-gradient(90deg,var(--pk),var(--bb));border-radius:4px;width:80%;}
+    #fp-queue-panel{
+      position:absolute;inset:0;z-index:10;background:var(--ind);
+      transform:translateY(100%);transition:transform .28s ease;
+      display:flex;flex-direction:column;padding:20px 16px;
+      overflow-y:auto;pointer-events:none;}
+    #fp-queue-panel.open{transform:translateY(0);pointer-events:auto;}
+    .fp-queue-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+    .fp-queue-title{font-size:16px;font-weight:700;color:var(--bb);}
+    .fp-queue-close{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;}
+
+    /* ── IMPORT CARDS ── */
+    .import-card{
+      background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;}
+    .import-card h3{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--bb);}
+    .import-card p{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;}
+    .import-btn{
+      width:100%;background:linear-gradient(135deg,var(--pk),var(--ind-l));
+      border:none;border-radius:12px;padding:13px;color:#fff;
+      font-size:14px;font-weight:700;cursor:pointer;}
+    .import-btn.yt{background:linear-gradient(135deg,#ff0000,#900);}
+    .chips-wrap{display:flex;flex-wrap:wrap;gap:8px;}
+    .playlist-chip{
+      background:var(--ind-l);border-radius:10px;padding:8px 12px;
+      font-size:13px;cursor:pointer;border:1px solid transparent;
+      transition:border-color .15s;}
+    .playlist-chip:active{border-color:var(--pk);}
+
+    /* ── PWA BANNER ── */
+    .pwa-banner{
+      background:linear-gradient(135deg,var(--ind-l),var(--ind-m));
+      border:1px solid var(--pk);border-radius:12px;
+      padding:10px 14px;margin:10px 16px;
+      display:none;align-items:center;gap:10px;font-size:13px;}
+    .pwa-banner-text{flex:1;line-height:1.4;}
+    .pwa-install-btn{
+      background:var(--pk);border:none;border-radius:8px;
+      padding:6px 12px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;}
+
+    /* ── SPOTIFY ── */
+    .sp-stats{
+      background:linear-gradient(135deg,#1DB954,var(--ind-l));
+      border-radius:14px;padding:14px;margin-bottom:14px;}
+    .sp-stats-row{display:flex;justify-content:space-around;text-align:center;}
+    .sp-stat-num{font-size:22px;font-weight:800;}
+    .sp-stat-lbl{font-size:11px;color:rgba(255,255,255,.7);}
+
+    /* ── TOAST ── */
+    #toast{
+      position:fixed;top:20px;left:50%;
+      transform:translateX(-50%) translateY(-90px);
+      background:var(--ind-l);color:var(--txt);
+      padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;
+      z-index:9999;transition:transform .28s;
+      border:1px solid var(--pk);white-space:nowrap;pointer-events:none;}
+    #toast.show{transform:translateX(-50%) translateY(0);}
+
+    /* ── YT PLAYER (hidden) ── */
+    #yt-player{position:fixed;bottom:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;}
+  </style>
+</head>
+<body>
+
+<!-- HIDDEN YT PLAYER — must be in DOM before scripts run -->
+<div id="yt-player"></div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- FIXED TOP SHELL -->
+<div id="shell-top">
+  <div id="topbar">
+    <div>
+      <h1>Unbound Music</h1>
+      <div id="greeting-txt"></div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" onclick="focusSearch()" aria-label="Search">🔍</button>
+      <button class="icon-btn" onclick="switchTab('import')" aria-label="Import">📥</button>
+    </div>
+  </div>
+  <div id="tab-strip">
+    <button class="tab active" data-tab="home">🏠 Home</button>
+    <button class="tab" data-tab="search">🔍 Search</button>
+    <button class="tab" data-tab="youtube">▶️ YouTube</button>
+    <button class="tab" data-tab="spotify">💚 Spotify</button>
+    <button class="tab" data-tab="liked">❤️ Liked</button>
+    <button class="tab" data-tab="downloads">⬇️ Saved</button>
+    <button class="tab" data-tab="queue">Queue</button>
+    <button class="tab" data-tab="import">📥 Import</button>
+  </div>
+</div>
+
+<!-- SCROLLABLE CONTENT -->
+<div id="content">
+
+  <!-- HOME -->
+  <div class="view active" id="view-home">
+    <div class="pwa-banner" id="pwa-banner">
+      <div>📲</div>
+      <div class="pwa-banner-text"><strong>Install Unbound Music</strong><br>Works offline!</div>
+      <button class="pwa-install-btn" onclick="installPWA()">Install</button>
+    </div>
+    <div class="section">
+      <div class="section-row">
+        <div class="section-title">🔥 Trending</div>
+        <span class="see-all" onclick="loadTrending()">Refresh</span>
+      </div>
+      <div class="track-list" id="trending-list">
+        <div class="loading"><div class="spinner"></div><p>Loading...</p></div>
+      </div>
+    </div>
+    <div class="section" style="margin-top:8px">
+      <div class="section-title">🕐 Recently Played</div>
+      <div class="track-list" id="recent-list">
+        <div class="empty-state"><div class="ico">🎧</div><p>Nothing yet — play something!</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="view" id="view-search">
+    <div class="search-wrap">
+      <input type="search" id="search-input" placeholder="Artists, songs, anything…" autocomplete="off"/>
+      <button class="search-btn" onclick="doSearch()">🔍</button>
+    </div>
+    <div class="section">
+      <div class="section-title" id="results-title">Search results</div>
+      <div class="track-list" id="results-list">
+        <div class="empty-state"><div class="ico">🎵</div><p>Type above and search.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- YOUTUBE -->
+  <div class="view" id="view-youtube">
+    <div class="section">
+      <div class="section-row">
+        <div class="section-title">▶️ My Playlists</div>
+        <span class="see-all" onclick="loadYTPlaylists()">Refresh</span>
+      </div>
+      <div id="yt-playlists-wrap">
+        <div class="empty-state"><div class="ico">📋</div><p>Enter your Channel ID in Import tab.</p></div>
+      </div>
+      <div class="section-title" style="margin-top:16px">📡 Subscriptions</div>
+      <div class="track-list" id="yt-subs-list">
+        <div class="empty-state"><div class="ico">📡</div><p>Load from Import tab.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPOTIFY -->
+  <div class="view" id="view-spotify">
+    <div class="section">
+      <div class="sp-stats" id="spotify-stats" style="display:none">
+        <div class="sp-stats-row">
+          <div><div class="sp-stat-num" id="sp-liked-count">0</div><div class="sp-stat-lbl">Liked</div></div>
+          <div><div class="sp-stat-num" id="sp-playlist-count">0</div><div class="sp-stat-lbl">Playlists</div></div>
+          <div><div class="sp-stat-num" id="sp-artist-count">0</div><div class="sp-stat-lbl">Artists</div></div>
+        </div>
+      </div>
+      <div id="spotify-upload-prompt">
+        <div style="text-align:center;padding:30px 20px">
+          <div style="font-size:48px;margin-bottom:12px">💚</div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:8px">Import Spotify Library</div>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px">Upload your <strong>YourLibrary.json</strong> to load all your liked songs and playlists.</p>
+          <input type="file" id="spotify-file-input" accept=".json" style="display:none" onchange="handleSpotifyImport(event)"/>
+          <button class="import-btn" style="max-width:260px;margin:0 auto;display:block" onclick="document.getElementById('spotify-file-input').click()">📂 Upload YourLibrary.json</button>
+          <div style="margin-top:16px;font-size:12px;color:var(--muted)">Go to <strong style="color:var(--bb)">spotify.com/account/privacy</strong> → Download your data</div>
+        </div>
+      </div>
+      <div id="spotify-content" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none">
+          <button class="tab active" id="sp-tab-liked" onclick="switchSpotifyTab('liked')">❤️ Liked</button>
+          <button class="tab" id="sp-tab-playlists" onclick="switchSpotifyTab('playlists')">📋 Playlists</button>
+          <button class="tab" id="sp-tab-artists" onclick="switchSpotifyTab('artists')">🎤 Artists</button>
+        </div>
+        <div id="sp-liked-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <span style="font-size:13px;color:var(--muted)" id="sp-liked-label"></span>
+            <button style="background:linear-gradient(135deg,var(--pk),var(--ind-l));border:none;border-radius:20px;padding:6px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer" onclick="playAllSpotifyLiked()">▶ Play All</button>
+          </div>
+          <div class="track-list" id="spotify-liked-list"></div>
+          <div id="sp-liked-more" style="text-align:center;padding:12px;display:none">
+            <button class="import-btn" style="max-width:200px;margin:0 auto;display:block" onclick="showMoreLiked()">Load More</button>
+          </div>
+        </div>
+        <div id="sp-playlists-panel" style="display:none"><div class="track-list" id="spotify-playlists-list"></div></div>
+        <div id="sp-artists-panel" style="display:none"><div class="track-list" id="spotify-artists-list"></div></div>
+        <div id="sp-playlist-tracks-panel" style="display:none">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <button onclick="backToPlaylists()" style="background:var(--ind-l);border:none;border-radius:50%;width:32px;height:32px;color:var(--txt);font-size:16px;cursor:pointer">←</button>
+            <div id="sp-playlist-tracks-title" style="font-size:15px;font-weight:700"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button style="background:linear-gradient(135deg,var(--pk),var(--ind-l));border:none;border-radius:20px;padding:8px 18px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;flex:1" onclick="playSpotifyPlaylist()">▶ Play All</button>
+            <button style="background:var(--ind-l);border:none;border-radius:20px;padding:8px 18px;color:var(--txt);font-size:13px;font-weight:700;cursor:pointer;flex:1" onclick="shuffleSpotifyPlaylist()">🔀 Shuffle</button>
+          </div>
+          <div class="track-list" id="sp-playlist-tracks-list"></div>
+        </div>
+      </div>
+      <div id="spotify-reimport" style="display:none;margin-top:16px;text-align:center">
+        <input type="file" id="spotify-file-reimport" accept=".json" style="display:none" onchange="handleSpotifyImport(event)"/>
+        <button onclick="document.getElementById('spotify-file-reimport').click()" style="background:transparent;border:1px solid var(--ind-l);border-radius:20px;padding:8px 18px;color:var(--muted);font-size:12px;cursor:pointer">↩ Re-import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIKED -->
+  <div class="view" id="view-liked">
+    <div class="section">
+      <div class="section-title">❤️ Liked Songs</div>
+      <div class="track-list" id="liked-list">
+        <div class="empty-state"><div class="ico">💗</div><p>Tap 🤍 on any track!</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DOWNLOADS -->
+  <div class="view" id="view-downloads">
+    <div class="section">
+      <div class="section-title">⬇️ Saved for Offline</div>
+      <div class="track-list" id="downloads-list">
+        <div class="empty-state"><div class="ico">📥</div><p>Tap ⬇️ to save tracks.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUEUE -->
+  <div class="view" id="view-queue">
+    <div class="section">
+      <div class="section-row">
+        <div class="section-title">▶️ Up Next</div>
+        <span class="see-all" onclick="clearQueue()">Clear</span>
+      </div>
+      <div class="track-list" id="queue-list">
+        <div class="empty-state"><div class="ico">🎶</div><p>Queue is empty.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT -->
+  <div class="view" id="view-import">
+    <div class="section">
+      <div class="section-title">📥 Import Your Music</div>
+      <div class="import-card">
+        <h3>▶️ YouTube Playlists &amp; Subscriptions</h3>
+        <p>Enter your YouTube Channel ID (find it at youtube.com → Your Channel → Share).</p>
+        <input type="text" id="yt-channel-id" placeholder="UCxxxxxxxxxxxxxxxxxx"
+          style="background:var(--ind-l);border:1.5px solid var(--ind-l);border-radius:10px;
+                 padding:12px 14px;color:var(--txt);font-size:13px;outline:none;
+                 width:100%;margin-bottom:10px;font-family:monospace"/>
+        <button class="import-btn yt" onclick="importYTData()">📥 Load My YouTube Data</button>
+      </div>
+      <div class="import-card">
+        <h3>💚 Spotify Liked Songs &amp; Playlists</h3>
+        <p>1. Go to <strong>spotify.com/account/privacy</strong><br>2. Click <strong>Download your data</strong> → wait for email<br>3. Extract ZIP → upload <strong>YourLibrary.json</strong></p>
+        <input type="file" id="spotify-file-input2" accept=".json" style="display:none" onchange="handleSpotifyImport(event)"/>
+        <button class="import-btn" onclick="document.getElementById('spotify-file-input2').click()">📂 Upload YourLibrary.json</button>
+      </div>
+      <div class="import-card">
+        <h3>🔑 Change API Key</h3>
+        <button class="import-btn" style="background:var(--ind-l);color:var(--txt)" onclick="resetApiKey()">🔑 Reset &amp; Re-enter Key</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#content -->
+
+<!-- BOTTOM NAV -->
+<div id="bottom-nav">
+  <button class="nav-item active" id="nav-home" onclick="switchTab('home')"><span>🏠</span><span>Home</span></button>
+  <button class="nav-item" id="nav-search" onclick="focusSearch()"><span>🔍</span><span>Search</span></button>
+  <button class="nav-item" id="nav-liked" onclick="switchTab('liked')"><span>❤️</span><span>Liked</span></button>
+  <button class="nav-item" id="nav-youtube" onclick="switchTab('youtube')"><span>▶️</span><span>YouTube</span></button>
+  <button class="nav-item" id="nav-import" onclick="switchTab('import')"><span>📥</span><span>Import</span></button>
+</div>
+
+<!-- MINI PLAYER -->
+<div id="mini-player" onclick="openFullPlayer()">
+  <div class="mp-row">
+    <img class="mp-thumb" id="mp-thumb" src="" alt=""/>
+    <div class="mp-info">
+      <div class="mp-title" id="mp-title">Nothing playing</div>
+      <div class="mp-artist" id="mp-artist">—</div>
+    </div>
+    <div class="mp-controls" onclick="event.stopPropagation()">
+      <button class="mp-btn" onclick="playPrev()">⏮</button>
+      <button class="mp-btn play" id="mp-play-btn" onclick="togglePlayPause()">▶</button>
+      <button class="mp-btn" onclick="playNext()">⏭</button>
+    </div>
+  </div>
+  <div class="mp-progress"><div class="mp-progress-fill" id="mp-progress-fill"></div></div>
+</div>
+
+<!-- FULL PLAYER -->
+<div id="full-player">
+  <div id="fp-bg"></div>
+  <div class="fp-content">
+    <div class="fp-handle-wrap"><div class="fp-handle"></div></div>
+    <div class="fp-header">
+      <button class="fp-close" onclick="closeFullPlayer()">⌄</button>
+      <span class="fp-header-title">Now Playing</span>
+      <button class="fp-menu-btn" onclick="toggleQueuePanel()">☰</button>
+    </div>
+    <div class="fp-art-wrap"><img id="fp-art" src="" alt="Album Art"/></div>
+    <div class="fp-info">
+      <div class="fp-info-left">
+        <div id="fp-title">Nothing playing</div>
+        <div id="fp-artist">—</div>
+      </div>
+      <button class="fp-like-btn" id="fp-like-btn" onclick="toggleLike()">🤍</button>
+    </div>
+    <div class="fp-progress-wrap">
+      <div class="fp-progress-bar" id="fp-progress-bar" onclick="fpSeekTo(event)">
+        <div class="fp-progress-fill" id="fp-progress-fill"></div>
+        <div class="fp-progress-knob" id="fp-knob"></div>
+      </div>
+      <div class="fp-time-row">
+        <span class="fp-time" id="fp-time-current">0:00</span>
+        <span class="fp-time" id="fp-time-total">0:00</span>
+      </div>
+    </div>
+    <div class="fp-controls">
+      <button class="fp-ctrl-btn" id="fp-shuffle-btn" onclick="toggleShuffle()">🔀</button>
+      <button class="fp-ctrl-btn" onclick="playPrev()">⏮</button>
+      <button class="fp-play-pause" id="fp-play-btn" onclick="togglePlayPause()">▶</button>
+      <button class="fp-ctrl-btn" onclick="playNext()">⏭</button>
+      <button class="fp-ctrl-btn" id="fp-repeat-btn" onclick="toggleRepeat()">🔁</button>
+    </div>
+    <div class="fp-extra">
+      <button class="fp-extra-btn" onclick="toggleQueuePanel()"><span class="ei">☰</span>Queue</button>
+      <button class="fp-extra-btn" onclick="downloadCurrentTrack()"><span class="ei">⬇️</span>Save</button>
+      <button class="fp-extra-btn" onclick="addCurrentToQueue()"><span class="ei">➕</span>Add</button>
+      <button class="fp-extra-btn" onclick="switchTab('liked');closeFullPlayer()"><span class="ei">❤️</span>Liked</button>
+    </div>
+    <div class="fp-volume">
+      <span class="fp-vol-icon">🔈</span>
+      <div class="fp-vol-bar" id="fp-vol-bar" onclick="setVolume(event)">
+        <div class="fp-vol-fill" id="fp-vol-fill"></div>
+      </div>
+      <span class="fp-vol-icon">🔊</span>
+    </div>
+  </div>
+  <div id="fp-queue-panel">
+    <div class="fp-queue-header">
+      <span class="fp-queue-title">Up Next</span>
+      <button class="fp-queue-close" onclick="toggleQueuePanel()">✕</button>
+    </div>
+    <div class="track-list" id="fp-queue-list"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── CONSTANTS ──────────────────────────────────────────────────────────────
+const API_KEY = 'AIzaSyBuKUYWFOgJ4KXptgzK_l-qdgsLfWBEgAQ';
+const SP_PAGE = 30;
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let player       = null;
+let playerReady  = false;
+let pendingVideoId = null;   // queued play before player was ready
+
+let currentTrack  = null;
+let currentIndex  = -1;
+let queue         = [];
+let queueSource   = '';
+let isPlaying     = false;
+let shuffleOn     = false;
+let repeatMode    = 0;       // 0=off 1=all 2=one
+let currentVolume = 0.8;
+let progressTimer = null;
+let toastTimer    = null;
+let currentTab    = 'home';
+let spLikedPage   = 0;
+let currentSpPl   = null;
+let deferredInstall = null;
+
+let liked       = lsGet('liked_songs',     []);
+let downloads   = lsGet('downloads',       []);
+let recentlyPlayed = lsGet('recently_played',[]);
+let spotifyLiked   = lsGet('spotify_liked', []);
+let spotifyPlaylists = lsGet('spotify_playlists',[]);
+let ytChannelId  = localStorage.getItem('yt_channel_id') || '';
+let ytPlaylists  = lsGet('yt_playlists',   []);
+
+// track lists keyed by container id, for playFromList
+const listSources = {};
+
+// ── LOCAL STORAGE HELPERS ──────────────────────────────────────────────────
+function lsGet(key, def){ try{ return JSON.parse(localStorage.getItem(key)) || def; }catch(e){ return def; } }
+function lsSave(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+
+// ── LAYOUT INIT ────────────────────────────────────────────────────────────
+function initLayout(){
+  // Content top/bottom set via CSS (108px / 136px) — reliable on all browsers.
+  // Only dynamically position the mini-player above the bottom nav.
+  const navH = document.getElementById('bottom-nav').offsetHeight || 60;
+  document.getElementById('mini-player').style.bottom = (navH + 6) + 'px';
+}
+
+// ── GREETING ───────────────────────────────────────────────────────────────
+function setGreeting(){
+  const h = new Date().getHours();
+  const g = h<12 ? '☀️ Good morning' : h<17 ? '👋 Good afternoon' : '🌙 Good evening';
+  const el = document.getElementById('greeting-txt');
+  if(el) el.textContent = g;
+}
+
+// ── TAB SWITCHING ──────────────────────────────────────────────────────────
+const TAB_IDS = ['home','search','youtube','spotify','liked','downloads','queue','import'];
+
+function switchTab(tab){
+  if(!TAB_IDS.includes(tab)) return;
+  currentTab = tab;
+
+  // views
+  TAB_IDS.forEach(t => {
+    const v = document.getElementById('view-' + t);
+    if(v) v.classList.toggle('active', t === tab);
+  });
+
+  // tab strip
+  document.querySelectorAll('#tab-strip .tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  // bottom nav
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navMap = {home:'nav-home',liked:'nav-liked',youtube:'nav-youtube',import:'nav-import'};
+  if(navMap[tab]) document.getElementById(navMap[tab])?.classList.add('active');
+}
+
+function focusSearch(){
+  switchTab('search');
+  setTimeout(() => {
+    const si = document.getElementById('search-input');
+    if(si){ si.focus(); }
+  }, 120);
+}
+
+// ── YOUTUBE PLAYER ─────────────────────────────────────────────────────────
+// #yt-player is in DOM at top of body — guaranteed available before any script runs
+function loadYTPlayer(){
+  if(window.YT && window.YT.Player){ initPlayer(); return; }
+  // Avoid injecting twice
+  if(document.getElementById('yt-api-script')) return;
+  const s = document.createElement('script');
+  s.id  = 'yt-api-script';
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(s);
+}
+
+window.onYouTubeIframeAPIReady = function(){ initPlayer(); };
+
+function initPlayer(){
+  if(player) return; // already initialised
+  try {
+    player = new YT.Player('yt-player', {
+      height:'1', width:'1',
+      playerVars:{
+        autoplay:0, controls:0, disablekb:1,
+        fs:0, iv_load_policy:3, modestbranding:1, rel:0,
+        playsinline:1
+      },
+      events:{
+        onReady: onPlayerReady,
+        onStateChange: onPlayerState,
+        onError: onPlayerError
+      }
+    });
+  } catch(e){
+    console.error('YT init error:', e);
+    showToast('Player init failed — reload to retry');
+  }
+}
+
+function onPlayerReady(){
+  playerReady = true;
+  player.setVolume(Math.round(currentVolume * 100));
+  // If a track was requested before the player was ready, play it now
+  if(pendingVideoId){
+    player.loadVideoById(pendingVideoId);
+    pendingVideoId = null;
+  }
+}
+
+function onPlayerState(e){
+  const S = YT.PlayerState;
+  if(e.data === S.PLAYING){
+    isPlaying = true;
+    updatePlayBtns(true);
+    startProgress();
+  } else if(e.data === S.PAUSED || e.data === S.BUFFERING){
+    if(e.data === S.PAUSED){ isPlaying = false; updatePlayBtns(false); }
+  } else if(e.data === S.ENDED){
+    stopProgress();
+    if(repeatMode === 2){ safeSeek(0); safePlay(); }
+    else if(shuffleOn){ playRandom(); }
+    else { playNext(); }
+  }
+}
+
+function onPlayerError(e){
+  console.warn('YT player error code:', e.data);
+  showToast('Skipping — playback error (' + e.data + ')');
+  setTimeout(() => shuffleOn ? playRandom() : playNext(), 1500);
+}
+
+// Safe player wrappers — never throw
+function safePlay(){
+  try{ if(player && playerReady) player.playVideo(); }catch(e){}
+}
+function safePause(){
+  try{ if(player && playerReady) player.pauseVideo(); }catch(e){}
+}
+function safeSeek(sec){
+  try{ if(player && playerReady) player.seekTo(sec, true); }catch(e){}
+}
+function safeGetDuration(){
+  try{ return (player && playerReady) ? (player.getDuration()||0) : 0; }catch(e){ return 0; }
+}
+function safeGetTime(){
+  try{ return (player && playerReady) ? (player.getCurrentTime()||0) : 0; }catch(e){ return 0; }
+}
+
+// ── PLAY A TRACK ───────────────────────────────────────────────────────────
+function playTrack(track, index, source){
+  if(!track || !track.id) return;
+
+  currentTrack = track;
+  currentIndex = (typeof index === 'number') ? index : -1;
+  if(source) queueSource = source;
+
+  // Update UI immediately — don't wait for player
+  updatePlayerUI(track);
+  markPlayingItem(track.id);
+  addToRecent(track);
+
+  // Load video
+  const vid = track.id;
+  if(player && playerReady){
+    try{
+      player.loadVideoById(vid);
+      // loadVideoById auto-plays in most browsers but not all — force it
+      // onPlayerState PLAYING will confirm and update buttons
+    }catch(e){
+      console.error('loadVideoById error:', e);
+      showToast('Playback error — try again');
+    }
+  } else {
+    // Player not ready yet — queue the video
+    pendingVideoId = vid;
+    showToast('Player loading…');
+    // Kick off player init if it hasn't started
+    loadYTPlayer();
+  }
+}
+
+function playFromList(index, listId){
+  const tracks = listSources[listId];
+  if(!tracks || !tracks[index]) return;
+  queue = tracks;
+  queueSource = listId;
+  playTrack(tracks[index], index, listId);
+}
+
+function updatePlayerUI(track){
+  // Mini player
+  document.getElementById('mp-thumb').src   = track.thumb || '';
+  document.getElementById('mp-title').textContent  = track.title  || 'Unknown';
+  document.getElementById('mp-artist').textContent = track.artist || '—';
+  document.getElementById('mini-player').classList.add('visible');
+
+  // Full player
+  document.getElementById('fp-title').textContent  = track.title  || 'Unknown';
+  document.getElementById('fp-artist').textContent = track.artist || '—';
+  document.getElementById('fp-art').src = track.thumb || '';
+  document.getElementById('fp-bg').style.backgroundImage = track.thumb ? 'url(' + track.thumb + ')' : '';
+
+  // Like button
+  const isLiked = liked.some(l => l.id === track.id);
+  document.getElementById('fp-like-btn').textContent = isLiked ? '❤️' : '🤍';
+}
+
+function updatePlayBtns(playing){
+  const icon = playing ? '⏸' : '▶';
+  document.getElementById('mp-play-btn').textContent = icon;
+  document.getElementById('fp-play-btn').textContent = icon;
+  const art = document.getElementById('fp-art');
+  if(art) playing ? art.classList.add('big') : art.classList.remove('big');
+}
+
+function markPlayingItem(trackId){
+  document.querySelectorAll('.track-item').forEach(el => {
+    const playing = el.id === 'ti-' + trackId;
+    el.classList.toggle('playing', playing);
+  });
+}
+
+// ── PROGRESS ───────────────────────────────────────────────────────────────
+function startProgress(){
+  stopProgress();
+  progressTimer = setInterval(tickProgress, 500);
+}
+function stopProgress(){
+  if(progressTimer){ clearInterval(progressTimer); progressTimer = null; }
+}
+function tickProgress(){
+  const dur = safeGetDuration();
+  const cur = safeGetTime();
+  if(!dur) return;
+  const pct = Math.min(100, (cur / dur) * 100);
+
+  // mini player bar
+  document.getElementById('mp-progress-fill').style.width = pct + '%';
+
+  // full player bar
+  document.getElementById('fp-progress-fill').style.width = pct + '%';
+  const knob = document.getElementById('fp-knob');
+  if(knob) knob.style.left = pct + '%';
+
+  document.getElementById('fp-time-current').textContent = fmtTime(cur);
+  document.getElementById('fp-time-total').textContent   = fmtTime(dur);
+}
+
+function fmtTime(s){
+  s = Math.floor(s||0);
+  return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+
+function fpSeekTo(e){
+  const bar = document.getElementById('fp-progress-bar');
+  const pct = Math.max(0, Math.min(1, e.offsetX / bar.offsetWidth));
+  safeSeek(safeGetDuration() * pct);
+}
+
+// ── CONTROLS ───────────────────────────────────────────────────────────────
+function togglePlayPause(){
+  if(!currentTrack){ showToast('Pick a track first'); return; }
+  if(isPlaying){ safePause(); isPlaying=false; updatePlayBtns(false); }
+  else         { safePlay();  isPlaying=true;  updatePlayBtns(true); }
+}
+
+function playNext(){
+  if(!queue.length) return;
+  let next = currentIndex + 1;
+  if(next >= queue.length){ if(repeatMode===1) next=0; else return; }
+  playTrack(queue[next], next, queueSource);
+}
+
+function playPrev(){
+  if(!queue.length) return;
+  const t = safeGetTime();
+  if(t > 3){ safeSeek(0); return; }
+  let prev = currentIndex - 1;
+  if(prev < 0) prev = queue.length - 1;
+  playTrack(queue[prev], prev, queueSource);
+}
+
+function playRandom(){
+  if(!queue.length) return;
+  let i;
+  do { i = Math.floor(Math.random() * queue.length); } while(i === currentIndex && queue.length > 1);
+  playTrack(queue[i], i, queueSource);
+}
+
+function toggleShuffle(){
+  shuffleOn = !shuffleOn;
+  document.getElementById('fp-shuffle-btn').classList.toggle('on', shuffleOn);
+  showToast(shuffleOn ? '🔀 Shuffle on' : 'Shuffle off');
+}
+
+function toggleRepeat(){
+  repeatMode = (repeatMode + 1) % 3;
+  const icons = ['🔁','🔁','🔂'];
+  const labels = ['Repeat off','Repeat all','Repeat one'];
+  const btn = document.getElementById('fp-repeat-btn');
+  btn.textContent = icons[repeatMode];
+  btn.classList.toggle('on', repeatMode > 0);
+  showToast(labels[repeatMode]);
+}
+
+function setVolume(e){
+  const bar = document.getElementById('fp-vol-bar');
+  const pct = Math.max(0, Math.min(1, e.offsetX / bar.offsetWidth));
+  currentVolume = pct;
+  document.getElementById('fp-vol-fill').style.width = (pct*100) + '%';
+  try{ if(player && playerReady) player.setVolume(Math.round(pct*100)); }catch(ex){}
+}
+
+// ── FULL PLAYER OPEN/CLOSE ─────────────────────────────────────────────────
+function openFullPlayer(){
+  if(!currentTrack) return;
+  document.getElementById('full-player').classList.add('open');
+  document.getElementById('bottom-nav').style.display = 'none';
+  document.getElementById('mini-player').style.display = 'none';
+}
+function closeFullPlayer(){
+  document.getElementById('full-player').classList.remove('open');
+  document.getElementById('bottom-nav').style.display = 'flex';
+  if(currentTrack) document.getElementById('mini-player').classList.add('visible');
+}
+function toggleQueuePanel(){
+  document.getElementById('fp-queue-panel').classList.toggle('open');
+  renderFPQueue();
+}
+function renderFPQueue(){
+  const el = document.getElementById('fp-queue-list');
+  if(!queue.length){ el.innerHTML='<div class="empty-state"><div class="ico">🎶</div><p>Queue is empty.</p></div>'; return; }
+  el.innerHTML = queue.map((t,i) => trackHTML(t, i, '__queue__')).join('');
+  listSources['__queue__'] = queue;
+}
+
+// ── LIKE / DOWNLOAD ────────────────────────────────────────────────────────
+function toggleLike(){
+  if(!currentTrack) return;
+  const idx = liked.findIndex(l => l.id === currentTrack.id);
+  if(idx > -1){ liked.splice(idx,1); showToast('Removed from liked'); }
+  else { liked.unshift(currentTrack); showToast('❤️ Added to liked'); }
+  lsSave('liked_songs', liked);
+  document.getElementById('fp-like-btn').textContent = liked.some(l=>l.id===currentTrack.id) ? '❤️' : '🤍';
+  if(currentTab === 'liked') renderLiked();
+}
+
+function likeByIndex(index, listId){
+  const tracks = listSources[listId];
+  if(tracks && tracks[index]) toggleLikeTrack(tracks[index]);
+}
+function dlByIndex(index, listId){
+  const tracks = listSources[listId];
+  if(tracks && tracks[index]) downloadTrack(tracks[index]);
+}
+function toggleLikeTrack(track){
+  const idx = liked.findIndex(l => l.id === track.id);
+  if(idx > -1){ liked.splice(idx,1); showToast('Removed from liked'); }
+  else { liked.unshift(track); showToast('❤️ Liked!'); }
+  lsSave('liked_songs', liked);
+  if(currentTab === 'liked') renderLiked();
+}
+
+function downloadCurrentTrack(){
+  if(!currentTrack) return;
+  const exists = downloads.some(d => d.id === currentTrack.id);
+  if(!exists){ downloads.unshift(currentTrack); lsSave('downloads', downloads); showToast('⬇️ Saved'); }
+  else showToast('Already saved');
+  if(currentTab === 'downloads') renderDownloads();
+}
+
+function downloadTrack(track){
+  const exists = downloads.some(d => d.id === track.id);
+  if(!exists){ downloads.unshift(track); lsSave('downloads', downloads); showToast('⬇️ Saved'); }
+  else showToast('Already saved');
+  if(currentTab === 'downloads') renderDownloads();
+}
+
+// ── QUEUE MANAGEMENT ───────────────────────────────────────────────────────
+function addCurrentToQueue(){
+  if(!currentTrack) return;
+  queue.push(currentTrack);
+  showToast('➕ Added to queue');
+}
+function clearQueue(){
+  queue = [];
+  document.getElementById('queue-list').innerHTML = '<div class="empty-state"><div class="ico">🎶</div><p>Queue is empty.</p></div>';
+}
+
+// ── RECENTLY PLAYED ────────────────────────────────────────────────────────
+function addToRecent(track){
+  recentlyPlayed = recentlyPlayed.filter(t => t.id !== track.id);
+  recentlyPlayed.unshift(track);
+  if(recentlyPlayed.length > 30) recentlyPlayed.length = 30;
+  lsSave('recently_played', recentlyPlayed);
+}
+
+// ── RENDER HELPERS ─────────────────────────────────────────────────────────
+function escHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function trackHTML(track, index, listId){
+  const iL = liked.some(l => l.id === track.id);
+  const iP = currentTrack && currentTrack.id === track.id;
+  // Use index+listId only in onclick — no JSON serialization in HTML attrs
+  return '<div class="track-item' + (iP?' playing':'') + '" id="ti-' + track.id + '"'
+    + ' onclick="playFromList(' + index + ','' + listId + '')">'
+    + '<div class="playing-dot"></div>'
+    + (iP ? '<div class="eq-bars"><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div></div>' : '')
+    + '<img class="track-thumb" src="' + escHtml(track.thumb||'') + '" alt="" loading="lazy" onerror="this.src=''"/>'
+    + '<div class="track-info">'
+    + '<div class="track-title">' + escHtml(track.title) + '</div>'
+    + '<div class="track-artist">' + escHtml(track.artist) + '</div>'
+    + '</div>'
+    + '<div class="track-actions" onclick="event.stopPropagation()">'
+    + '<button class="track-btn" onclick="likeByIndex(' + index + ','' + listId + '')">' + (iL?'❤️':'🤍') + '</button>'
+    + '<button class="track-btn" onclick="dlByIndex(' + index + ','' + listId + '')">⬇️</button>'
+    + '</div>'
+    + '</div>';
+}
+
+function renderTrackList(tracks, containerId){
+  listSources[containerId] = tracks;
+  const c = document.getElementById(containerId);
+  if(!c) return;
+  if(!tracks.length){
+    c.innerHTML = '<div class="empty-state"><div class="ico">😕</div><p>No results found.</p></div>';
+    return;
+  }
+  c.innerHTML = tracks.map((t,i) => trackHTML(t, i, containerId)).join('');
+}
+
+function renderRecent(){
+  renderTrackList(recentlyPlayed.slice(0,10), 'recent-list');
+}
+function renderLiked(){
+  renderTrackList(liked, 'liked-list');
+}
+function renderDownloads(){
+  renderTrackList(downloads, 'downloads-list');
+}
+
+// ── SEARCH ─────────────────────────────────────────────────────────────────
+async function doSearch(){
+  const q = (document.getElementById('search-input')?.value || '').trim();
+  if(!q) return;
+  switchTab('search');
+  document.getElementById('results-title').textContent = '"' + q + '"';
+  document.getElementById('results-list').innerHTML = '<div class="loading"><div class="spinner"></div><p>Searching...</p></div>';
+  const tracks = await searchYT(q);
+  queue = tracks; queueSource = 'search';
+  renderTrackList(tracks, 'results-list');
+}
+
+async function searchYT(query, n=25){
+  try{
+    const url = 'https://superagent-4f645ca0.base44.app/functions/ytProxy?endpoint=search&part=snippet&q='+encodeURIComponent(query)+'&type=video&maxResults='+n;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if(data.error){
+      const c = data.error.code;
+      if(c===403) showToast('API quota exceeded for today');
+      else showToast('API error: '+(data.error.message||c));
+      return [];
+    }
+    return (data.items||[]).filter(i=>i.id&&i.id.videoId).map(i => ({
+      id:     i.id.videoId,
+      title:  i.snippet.title,
+      artist: i.snippet.channelTitle,
+      thumb:  i.snippet.thumbnails?.medium?.url || i.snippet.thumbnails?.default?.url || ''
+    }));
+  }catch(e){
+    showToast('Network error: '+e.message);
+    return [];
+  }
+}
+
+async function loadTrending(){
+  document.getElementById('trending-list').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
+  const qs = ['top hits 2025','trending music 2025','new releases 2025','viral songs 2025','best songs 2025'];
+  const tracks = await searchYT(qs[Math.floor(Math.random()*qs.length)], 20);
+  queue = tracks; queueSource = 'trending';
+  renderTrackList(tracks, 'trending-list');
+}
+
+// ── YOUTUBE PLAYLISTS ───────────────────────────────────────────────────────
+async function importYTData(){
+  const cid = document.getElementById('yt-channel-id').value.trim();
+  if(!cid){ showToast('Enter your Channel ID first'); return; }
+  ytChannelId = cid;
+  localStorage.setItem('yt_channel_id', cid);
+  showToast('📥 Loading YouTube data…');
+  await Promise.all([loadYTPlaylists(), loadYTSubscriptions()]);
+  switchTab('youtube');
+}
+
+async function loadYTPlaylists(){
+  const wrap = document.getElementById('yt-playlists-wrap');
+  if(!ytChannelId){ wrap.innerHTML='<div class="empty-state"><div class="ico">📋</div><p>Enter Channel ID in Import tab.</p></div>'; return; }
+  wrap.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading playlists…</p></div>';
+  try{
+    const data = await (await fetch('https://superagent-4f645ca0.base44.app/functions/ytProxy?endpoint=playlists&part=snippet,contentDetails&channelId='+ytChannelId+'&maxResults=50')).json();
+    if(data.error){ wrap.innerHTML=`<div class="empty-state"><div class="ico">⚠️</div><p>${escHtml(data.error.message)}</p></div>`; return; }
+    ytPlaylists = data.items || [];
+    lsSave('yt_playlists', ytPlaylists);
+    renderYTPlaylists();
+    showToast('✅ Playlists loaded!');
+  }catch(e){ showToast('Network error'); }
+}
+
+function renderYTPlaylists(){
+  const wrap = document.getElementById('yt-playlists-wrap');
+  if(!ytPlaylists.length){ wrap.innerHTML='<div class="empty-state"><div class="ico">📋</div><p>No playlists found.</p></div>'; return; }
+  wrap.innerHTML = '<div class="chips-wrap">' +
+    ytPlaylists.map(p => `<div class="playlist-chip" onclick="loadYTPlaylistTracks('${p.id}','${escHtml(p.snippet.title)}')">🎵 ${escHtml(p.snippet.title)} <span style="color:var(--muted)">(${p.contentDetails?.itemCount||'?'})</span></div>`).join('') +
+    '</div>';
+}
+
+async function loadYTPlaylistTracks(pid, name){
+  showToast('Loading "' + name + '"…');
+  try{
+    const data = await (await fetch('https://superagent-4f645ca0.base44.app/functions/ytProxy?endpoint=playlistItems&part=snippet&playlistId='+pid+'&maxResults=50')).json();
+    if(data.error){ showToast('Could not load playlist'); return; }
+    const tracks = (data.items||[]).filter(i=>i.snippet.resourceId?.videoId).map(i=>({
+      id:     i.snippet.resourceId.videoId,
+      title:  i.snippet.title,
+      artist: i.snippet.videoOwnerChannelTitle || 'YouTube',
+      thumb:  i.snippet.thumbnails?.medium?.url || ''
+    }));
+    queue = tracks; queueSource = name;
+    let sec = document.getElementById('yt-playlist-tracks-section');
+    if(!sec){
+      sec = document.createElement('div');
+      sec.id = 'yt-playlist-tracks-section';
+      sec.className = 'section';
+      document.getElementById('view-youtube').querySelector('.section').appendChild(sec);
+    }
+    sec.innerHTML = `<div class="section-title" style="margin-top:12px">🎵 ${escHtml(name)}</div><div class="track-list" id="yt-playlist-tracks"></div>`;
+    renderTrackList(tracks, 'yt-playlist-tracks');
+    showToast('✅ ' + tracks.length + ' tracks loaded');
+  }catch(e){ showToast('Network error'); }
+}
+
+async function loadYTSubscriptions(){
+  const el = document.getElementById('yt-subs-list');
+  if(!ytChannelId){ el.innerHTML='<div class="empty-state"><div class="ico">📡</div><p>Load from Import tab.</p></div>'; return; }
+  el.innerHTML='<div class="loading"><div class="spinner"></div><p>Loading subscriptions…</p></div>';
+  try{
+    const data = await (await fetch('https://superagent-4f645ca0.base44.app/functions/ytProxy?endpoint=subscriptions&part=snippet&channelId='+ytChannelId+'&maxResults=50')).json();
+    if(data.error){ el.innerHTML=`<div class="empty-state"><div class="ico">⚠️</div><p>${escHtml(data.error.message)}</p></div>`; return; }
+    const subs = (data.items||[]).map(s=>({
+      id:    s.snippet.resourceId.channelId,
+      title: s.snippet.title,
+      thumb: s.snippet.thumbnails?.medium?.url||''
+    }));
+    if(!subs.length){ el.innerHTML='<div class="empty-state"><div class="ico">📡</div><p>No public subscriptions found.</p></div>'; return; }
+    el.innerHTML = subs.map(s =>
+      `<div class="track-item" onclick="loadChannelVideos('${s.id}','${escHtml(s.title)}')">
+        <img class="track-thumb" src="${escHtml(s.thumb)}" alt="" loading="lazy"/>
+        <div class="track-info"><div class="track-title">${escHtml(s.title)}</div><div class="track-artist">Subscription</div></div>
+        <span style="color:var(--muted);font-size:18px">›</span>
+      </div>`
+    ).join('');
+    showToast('✅ ' + subs.length + ' subscriptions loaded');
+  }catch(e){ showToast('Network error'); }
+}
+
+async function loadChannelVideos(cid, name){
+  showToast('Loading ' + name + '…');
+  try{
+    const data = await (await fetch('https://superagent-4f645ca0.base44.app/functions/ytProxy?endpoint=search&part=snippet&channelId='+cid+'&type=video&maxResults=20&order=date')).json();
+    if(data.error){ showToast('Could not load videos'); return; }
+    const tracks = (data.items||[]).map(i=>({
+      id:     i.id.videoId,
+      title:  i.snippet.title,
+      artist: name,
+      thumb:  i.snippet.thumbnails?.medium?.url||''
+    }));
+    queue = tracks; queueSource = name;
+    switchTab('search');
+    document.getElementById('results-title').textContent = name;
+    renderTrackList(tracks, 'results-list');
+  }catch(e){ showToast('Network error'); }
+}
+
+// ── SPOTIFY IMPORT ─────────────────────────────────────────────────────────
+async function handleSpotifyImport(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  showToast('📂 Reading Spotify data…');
+  try{
+    if(file.name.endsWith('.zip')){ showToast('⚠️ Extract ZIP first, then upload YourLibrary.json'); return; }
+    const data = JSON.parse(await file.text());
+    let iL=[], iP=[], iA=[];
+    if(Array.isArray(data.tracks))
+      iL = data.tracks.filter(t=>t.name&&t.name!=='Unknown').map(t=>({
+        title:t.name, artist:t.artist||'Unknown', album:t.album||'',
+        isSpotify:true,
+        id:'sp_'+String(t.uri||t.name||Math.random()).replace(/[^a-z0-9]/gi,'_')
+      }));
+    if(Array.isArray(data.playlists))
+      iP = data.playlists.filter(p=>p.name&&(p.items||[]).length>0).map(p=>({
+        name:p.name, lastModified:p.lastModifiedDate||'',
+        tracks:(p.items||[]).filter(i=>i.track&&(i.track.trackName||i.track.name)).map(i=>({
+          title:i.track.trackName||i.track.name,
+          artist:i.track.artistName||i.track.artist||'Unknown',
+          album:i.track.albumName||'', isSpotify:true,
+          id:'sp_'+String(i.track.trackUri||i.track.name||Math.random()).replace(/[^a-z0-9]/gi,'_')
+        }))
+      }));
+    if(Array.isArray(data.artists))
+      iA = data.artists.filter(a=>a.name).map(a=>({name:a.name, uri:a.uri||''}));
+    if(!iL.length&&!iP.length){ showToast('⚠️ No music data found — use YourLibrary.json'); return; }
+    spotifyLiked    = iL;
+    spotifyPlaylists = iP;
+    lsSave('spotify_liked',     spotifyLiked);
+    lsSave('spotify_playlists', spotifyPlaylists);
+    lsSave('spotify_artists',   iA);
+    spLikedPage = 0;
+    renderSpotifyFull();
+    showToast('✅ ' + iL.length + ' songs & ' + iP.length + ' playlists!');
+    switchTab('spotify');
+  }catch(e){
+    console.error(e);
+    showToast('❌ Could not read file — use YourLibrary.json');
+  }
+}
+
+function renderSpotifyFull(){
+  const has = spotifyLiked.length > 0 || spotifyPlaylists.length > 0;
+  document.getElementById('spotify-upload-prompt').style.display = has ? 'none' : 'block';
+  document.getElementById('spotify-content').style.display       = has ? 'block' : 'none';
+  document.getElementById('spotify-reimport').style.display      = has ? 'block' : 'none';
+  if(has){
+    document.getElementById('spotify-stats').style.display = 'block';
+    document.getElementById('sp-liked-count').textContent    = spotifyLiked.length;
+    document.getElementById('sp-playlist-count').textContent = spotifyPlaylists.length;
+    document.getElementById('sp-artist-count').textContent   = (lsGet('spotify_artists',[])).length;
+    switchSpotifyTab('liked');
+  }
+}
+
+function switchSpotifyTab(tab){
+  ['liked','playlists','artists'].forEach(t => {
+    document.getElementById('sp-'+t+'-panel').style.display = t===tab ? 'block' : 'none';
+    document.getElementById('sp-tab-'+t)?.classList.toggle('active', t===tab);
+  });
+  document.getElementById('sp-playlist-tracks-panel').style.display = 'none';
+  if(tab==='liked')     renderSpotifyLikedList();
+  if(tab==='playlists') renderSpotifyPlaylists();
+  if(tab==='artists')   renderSpotifyArtists();
+}
+
+function renderSpotifyLikedList(){
+  const c = document.getElementById('spotify-liked-list');
+  if(!spotifyLiked.length){ c.innerHTML='<div class="empty-state"><div class="ico">💚</div><p>No liked songs imported yet.</p></div>'; return; }
+  spLikedPage = 0;
+  document.getElementById('sp-liked-label').textContent = spotifyLiked.length + ' songs';
+  c.innerHTML = spotifyLiked.slice(0, SP_PAGE).map((t,i) => spTrackHTML(t,i)).join('');
+  const more = document.getElementById('sp-liked-more');
+  if(spotifyLiked.length > SP_PAGE){ more.style.display='block'; spLikedPage=1; }
+  else more.style.display='none';
+}
+
+function showMoreLiked(){
+  const c = document.getElementById('spotify-liked-list');
+  const start = spLikedPage * SP_PAGE;
+  c.innerHTML += spotifyLiked.slice(start, start+SP_PAGE).map((t,i) => spTrackHTML(t, start+i)).join('');
+  spLikedPage++;
+  if(spLikedPage * SP_PAGE >= spotifyLiked.length)
+    document.getElementById('sp-liked-more').style.display='none';
+}
+
+function spTrackHTML(t, i){
+  return `<div class="track-item" onclick="searchAndPlaySpotify('${escHtml(t.title)}','${escHtml(t.artist)}',${i},'liked')">
+    <div class="track-thumb" style="display:flex;align-items:center;justify-content:center;font-size:24px;background:linear-gradient(135deg,#1DB954,var(--ind-m));flex-shrink:0">🎵</div>
+    <div class="track-info">
+      <div class="track-title">${escHtml(t.title)}</div>
+      <div class="track-artist">${escHtml(t.artist)}${t.album ? ' · ' + escHtml(t.album) : ''}</div>
+    </div>
+    <div class="track-actions" onclick="event.stopPropagation()">
+      <button class="track-btn" onclick="addSpotifyToQueue('${escHtml(t.title)}','${escHtml(t.artist)}')">➕</button>
+    </div>
+  </div>`;
+}
+
+async function searchAndPlaySpotify(title, artist, index, source){
+  showToast('🔍 Finding on YouTube…');
+  const tracks = await searchYT(title + ' ' + artist, 5);
+  if(!tracks.length){ showToast('Not found on YouTube'); return; }
+  queue = tracks; queueSource = source;
+  playTrack(tracks[0], 0, source);
+}
+
+async function addSpotifyToQueue(title, artist){
+  showToast('🔍 Finding…');
+  const tracks = await searchYT(title + ' ' + artist, 3);
+  if(!tracks.length){ showToast('Not found'); return; }
+  queue.push(tracks[0]);
+  showToast('➕ Added to queue');
+}
+
+function renderSpotifyPlaylists(){
+  const c = document.getElementById('spotify-playlists-list');
+  if(!spotifyPlaylists.length){ c.innerHTML='<div class="empty-state"><div class="ico">📋</div><p>No playlists found.</p></div>'; return; }
+  c.innerHTML = spotifyPlaylists.map((p,i) =>
+    `<div class="track-item" onclick="openSpotifyPlaylist(${i})">
+      <div class="track-thumb" style="display:flex;align-items:center;justify-content:center;font-size:24px;background:linear-gradient(135deg,#1DB954,var(--ind-m));flex-shrink:0">📋</div>
+      <div class="track-info"><div class="track-title">${escHtml(p.name)}</div><div class="track-artist">${p.tracks.length} songs${p.lastModified?' · '+p.lastModified.slice(0,10):''}</div></div>
+      <span style="color:var(--muted);font-size:18px">›</span>
+    </div>`
+  ).join('');
+}
+
+function openSpotifyPlaylist(i){
+  currentSpPl = spotifyPlaylists[i];
+  document.getElementById('sp-playlists-panel').style.display='none';
+  document.getElementById('sp-playlist-tracks-panel').style.display='block';
+  document.getElementById('sp-playlist-tracks-title').textContent = currentSpPl.name;
+  document.getElementById('sp-playlist-tracks-list').innerHTML =
+    currentSpPl.tracks.map((t,j) => spTrackHTML(t,j)).join('');
+}
+
+function backToPlaylists(){
+  document.getElementById('sp-playlist-tracks-panel').style.display='none';
+  document.getElementById('sp-playlists-panel').style.display='block';
+}
+
+async function playSpotifyPlaylist(){
+  if(!currentSpPl||!currentSpPl.tracks.length) return;
+  const t = currentSpPl.tracks[0];
+  await searchAndPlaySpotify(t.title, t.artist, 0, currentSpPl.name);
+}
+
+async function shuffleSpotifyPlaylist(){
+  if(!currentSpPl||!currentSpPl.tracks.length) return;
+  const i = Math.floor(Math.random() * currentSpPl.tracks.length);
+  const t = currentSpPl.tracks[i];
+  await searchAndPlaySpotify(t.title, t.artist, i, currentSpPl.name);
+}
+
+function renderSpotifyArtists(){
+  const artists = lsGet('spotify_artists',[]);
+  const c = document.getElementById('spotify-artists-list');
+  if(!artists.length){ c.innerHTML='<div class="empty-state"><div class="ico">🎤</div><p>No artists found.</p></div>'; return; }
+  c.innerHTML = artists.slice(0,50).map(a =>
+    `<div class="track-item" onclick="searchYTArtist('${escHtml(a.name)}')">
+      <div class="track-thumb" style="display:flex;align-items:center;justify-content:center;font-size:24px;background:linear-gradient(135deg,#1DB954,var(--ind-m));flex-shrink:0">🎤</div>
+      <div class="track-info"><div class="track-title">${escHtml(a.name)}</div><div class="track-artist">Artist</div></div>
+      <span style="color:var(--muted);font-size:18px">›</span>
+    </div>`
+  ).join('');
+}
+
+async function searchYTArtist(name){
+  showToast('🔍 Loading ' + name + '…');
+  switchTab('search');
+  document.getElementById('results-title').textContent = name;
+  document.getElementById('results-list').innerHTML='<div class="loading"><div class="spinner"></div><p>Loading…</p></div>';
+  const tracks = await searchYT(name + ' songs', 20);
+  queue = tracks; queueSource = name;
+  renderTrackList(tracks, 'results-list');
+}
+
+async function playAllSpotifyLiked(){
+  if(!spotifyLiked.length) return;
+  await searchAndPlaySpotify(spotifyLiked[0].title, spotifyLiked[0].artist, 0, 'liked');
+}
+
+// ── PWA ────────────────────────────────────────────────────────────────────
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  document.getElementById('pwa-banner').style.display='flex';
+});
+function installPWA(){
+  if(!deferredInstall){ showToast('Tap browser menu → Add to Home Screen'); return; }
+  deferredInstall.prompt();
+  deferredInstall.userChoice.then(() => {
+    deferredInstall = null;
+    document.getElementById('pwa-banner').style.display='none';
+  });
+}
+
+// ── API KEY ────────────────────────────────────────────────────────────────
+function resetApiKey(){
+  if(confirm('Reset API key? The page will reload.')){ localStorage.removeItem('yt_api_key'); location.reload(); }
+}
+
+// ── TOAST ──────────────────────────────────────────────────────────────────
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ── SWIPE TO DISMISS FULL PLAYER ───────────────────────────────────────────
+function setupSwipe(){
+  const fp = document.getElementById('full-player');
+  let startY=0, isDragging=false;
+  fp.addEventListener('touchstart', e => {
+    // Only swipe from handle area
+    const handle = fp.querySelector('.fp-handle-wrap');
+    if(!handle.contains(e.target)) return;
+    startY = e.touches[0].clientY;
+    isDragging = true;
+  }, {passive:true});
+  fp.addEventListener('touchmove', e => {
+    if(!isDragging) return;
+    const dy = e.touches[0].clientY - startY;
+    if(dy > 0) fp.style.transform = `translateY(${dy}px)`;
+  }, {passive:true});
+  fp.addEventListener('touchend', e => {
+    if(!isDragging) return;
+    isDragging = false;
+    const dy = e.changedTouches[0].clientY - startY;
+    fp.style.transform = '';
+    if(dy > 80) closeFullPlayer();
+  }, {passive:true});
+}
+
+// ── TAB STRIP CLICK DELEGATION ─────────────────────────────────────────────
+document.getElementById('tab-strip').addEventListener('click', e => {
+  const btn = e.target.closest('.tab');
+  if(btn && btn.dataset.tab) switchTab(btn.dataset.tab);
+});
+
+// ── BOOT ───────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  initLayout();
+  setGreeting();
+  loadYTPlayer();
+  renderRecent();
+  renderLiked();
+  renderDownloads();
+  if(spotifyLiked.length || spotifyPlaylists.length) renderSpotifyFull();
+  loadTrending();
+  if(ytChannelId){
+    const el = document.getElementById('yt-channel-id');
+    if(el) el.value = ytChannelId;
+    renderYTPlaylists();
+  }
+  // Search on Enter
+  document.getElementById('search-input').addEventListener('keyup', e => {
+    if(e.key === 'Enter') doSearch();
+  });
+  setupSwipe();
+  window.addEventListener('resize', initLayout);
+});
+
+document.addEventListener('dblclick', e => e.preventDefault());
+</script>
+</body>
+</html>
