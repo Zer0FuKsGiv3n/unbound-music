@@ -75,7 +75,16 @@ export async function fetchPlaylistTracks(playlistId: string, title: string): Pr
   const response = await fetch(`${proxyUrl}?endpoint=playlistItems&part=snippet&playlistId=${encodeURIComponent(playlistId)}&maxResults=50`);
   if (!response.ok) return [];
 
-  const data = await response.json() as { items?: Array<{ snippet?: { resourceId?: { videoId?: string }; title?: string; videoOwnerChannelTitle?: string; thumbnails?: { medium?: { url?: string } } } }> };
+  const data = await response.json() as {
+    items?: Array<{
+      snippet?: {
+        resourceId?: { videoId?: string };
+        title?: string;
+        videoOwnerChannelTitle?: string;
+        thumbnails?: { medium?: { url?: string } };
+      };
+    }>;
+  };
   return (data.items ?? [])
     .map((item) => {
       const videoId = item.snippet?.resourceId?.videoId;
