@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Route, Switch } from 'wouter';
+import { Route, Switch, useLocation } from 'wouter';
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { fetchSearchResults, fetchTrending, fetchPlaylistTracks, fetchSubscriptions, fetchUserPlaylists } from './lib/youtube';
 import type { PlaylistItem, TabKey, Track } from './types';
@@ -15,7 +15,7 @@ const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: 'import', label: 'Import', icon: '📥' },
 ];
 
-const defaultTrending = [
+const defaultTrending: Track[] = [
   {
     id: 'trending-1',
     title: 'Midnight Drive',
@@ -40,7 +40,8 @@ const defaultTrending = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [location, setLocation] = useLocation();
+  const activeTab: TabKey = location === '/' ? 'home' : (location.slice(1) as TabKey);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [trending, setTrending] = useState<Track[]>(defaultTrending);
@@ -49,7 +50,6 @@ function App() {
   const [queue, setQueue] = useState<Track[]>(() => loadFromStorage<Track[]>('queue', []));
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.8);
   const [channelId, setChannelId] = useState<string>(() => loadFromStorage<string>('yt_channel_id', ''));
   const [playlists, setPlaylists] = useState<PlaylistItem[]>(() => loadFromStorage<PlaylistItem[]>('yt_playlists', []));
   const [subscriptions, setSubscriptions] = useState<Track[]>(() => loadFromStorage<Track[]>('yt_subscriptions', []));
@@ -60,6 +60,10 @@ function App() {
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   }, []);
+
+  const changeTab = (tab: TabKey): void => {
+    setLocation(tab === 'home' ? '/' : `/${tab}`);
+  };
 
   useEffect(() => {
     void loadTrendingTracks();
@@ -99,7 +103,7 @@ function App() {
   const handleSearch = async (): Promise<void> => {
     const query = searchTerm.trim();
     if (!query) return;
-    setActiveTab('search');
+    setLocation('/search');
     const results = await fetchSearchResults(query);
     setSearchResults(results);
     setQueue(results);
@@ -118,7 +122,7 @@ function App() {
   const openPlaylist = async (playlistId: string, title: string): Promise<void> => {
     const tracks = await fetchPlaylistTracks(playlistId, title);
     setQueue(tracks);
-    setActiveTab('youtube');
+    setLocation('/youtube');
   };
 
   const toggleLike = (track: Track): void => {
@@ -135,12 +139,6 @@ function App() {
       if (exists) return current;
       return [track, ...current];
     });
-  };
-
-  const playTrack = (track: Track, sourceList?: Track[]): void => {
-    setCurrentTrack(track);
-    setQueue((current) => (sourceList && sourceList.length > 0 ? sourceList : current));
-    setPlaying(true);
   };
 
   const playNext = (): void => {
@@ -207,8 +205,8 @@ function App() {
           <div className="greeting">{greeting}</div>
         </div>
         <div className="topbar-actions">
-          <button type="button" className="icon-button" onClick={() => setActiveTab('search')}>🔍</button>
-          <button type="button" className="icon-button" onClick={() => setActiveTab('import')}>📥</button>
+          <button type="button" className="icon-button" onClick={() => setLocation('/search')}>🔍</button>
+          <button type="button" className="icon-button" onClick={() => setLocation('/import')}>📥</button>
         </div>
       </header>
 
@@ -218,7 +216,7 @@ function App() {
             type="button"
             key={tab.key}
             className={`tab ${activeTab === tab.key ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => changeTab(tab.key)}
           >
             <span>{tab.icon}</span>
             <span>{tab.label}</span>
@@ -345,7 +343,7 @@ function App() {
         </Switch>
       </main>
 
-      <div className={`player-bar ${currentTrack ? 'visible' : ''}`} onClick={() => currentTrack && setActiveTab('queue')}>
+      <div className={`player-bar ${currentTrack ? 'visible' : ''}`} onClick={() => setLocation('/queue')}>
         <img src={currentTrack?.thumb ?? ''} alt={currentTrack?.title ?? 'Track art'} className="player-art" />
         <div className="player-copy">
           <div className="player-title">{currentTrack?.title ?? 'Nothing playing'}</div>
