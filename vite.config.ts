@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'robots.txt'],
+      includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Unbound Music',
         short_name: 'Unbound',
@@ -30,13 +30,6 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/svg+xml',
             purpose: 'any maskable'
-          }
-        ],
-        screenshots: [
-          {
-            src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 720"><rect width="540" height="720" fill="%231A0A2E"/><text y="360" font-size="200" x="170">🎵</text></svg>',
-            sizes: '540x720',
-            form_factor: 'narrow'
           }
         ]
       },

@@ -1,0 +1,371 @@
+:root {
+  color-scheme: dark;
+  --bg: #1a0a2e;
+  --panel: #231242;
+  --panel-alt: #2d1b4e;
+  --accent: #7ec8e3;
+  --accent-strong: #ff2d78;
+  --text: #f0e6ff;
+  --muted: #9b86bd;
+  --border: rgba(255, 255, 255, 0.12);
+  --shadow: rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  min-height: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, 'Segoe UI', sans-serif;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button, input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #2d1b4e 0%, #1a0a2e 45%);
+  color: var(--text);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.75rem;
+  background: rgba(45, 27, 78, 0.9);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(10px);
+}
+
+.brand {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.greeting {
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.icon-button,
+.mini-button,
+.primary-button,
+.link-button,
+.tab,
+.chip {
+  border: none;
+  border-radius: 999px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.icon-button,
+.mini-button {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.tab-strip {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.8rem 0.8rem 0.5rem;
+  scrollbar-width: none;
+}
+
+.tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.tab.active {
+  background: linear-gradient(135deg, var(--accent-strong), #8636a9);
+  color: white;
+  border-color: transparent;
+}
+
+.content-area {
+  padding: 0.5rem 0.75rem 6.5rem;
+}
+
+.panel {
+  background: rgba(35, 18, 66, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 1.1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 10px 25px var(--shadow);
+}
+
+.panel h2,
+.panel h3 {
+  margin: 0 0 0.85rem;
+  font-size: 1.05rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.link-button {
+  background: transparent;
+  color: var(--accent-strong);
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+}
+
+.track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 0.95rem;
+  padding: 0.55rem 0.55rem;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.track-row.active {
+  border-color: rgba(255, 45, 120, 0.7);
+}
+
+.track-thumb {
+  width: 3.3rem;
+  height: 3.3rem;
+  border-radius: 0.85rem;
+  object-fit: cover;
+  background: var(--panel-alt);
+}
+
+.track-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-title {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-artist {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, var(--accent-strong), #7d4ec2);
+  color: white;
+  padding: 0.7rem 1rem;
+  font-weight: 700;
+}
+
+.primary-button.wide {
+  width: 100%;
+}
+
+.search-box {
+  display: flex;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.search-box input,
+.import-card input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  color: var(--text);
+  padding: 0.9rem 0.9rem;
+  outline: none;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--muted);
+}
+
+.emoji {
+  font-size: 2.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.emoji.large {
+  font-size: 3rem;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.chip {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+}
+
+.spotify-card,
+.import-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.spotify-card {
+  text-align: center;
+}
+
+.spotify-card p,
+.import-card p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.import-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.spacer {
+  height: 1rem;
+}
+
+.player-bar {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: none;
+  align-items: center;
+  gap: 0.8rem;
+  background: linear-gradient(135deg, rgba(45, 27, 78, 0.96), rgba(35, 18, 66, 0.96));
+  border: 1px solid rgba(255, 45, 120, 0.4);
+  border-radius: 1rem;
+  padding: 0.7rem 0.8rem;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+}
+
+.player-bar.visible {
+  display: flex;
+}
+
+.player-art {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.8rem;
+  object-fit: cover;
+}
+
+.player-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-title {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-artist {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mini-button.primary {
+  background: linear-gradient(135deg, var(--accent-strong), #7d4ec2);
+  color: white;
+}
+
+@media (min-width: 720px) {
+  .app-shell {
+    max-width: 900px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+}
