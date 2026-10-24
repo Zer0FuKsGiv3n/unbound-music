@@ -205,7 +205,6 @@ function App() {
     setLocation('/search');
     const results = await fetchSearchResults(query);
     setSearchResults(results);
-    setQueue(results);
   };
 
   const loadYouTubeData = async (): Promise<void> => {
