@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Route, Switch, useLocation } from 'wouter';
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { fetchArtistRadioTracks, fetchSearchResults, fetchTrending, fetchPlaylistTracks, fetchSubscriptions, fetchUserPlaylists } from './lib/youtube';
+import { getRecommendedTracks } from './lib/recommendations';
 import { createYouTubePlayer, describeYouTubeError, YouTubePlayerStates } from './lib/youtubePlayer';
 import type { YouTubePlayerInstance } from './lib/youtubePlayer';
 import type { PlaylistItem, TabKey, Track } from './types';
@@ -58,6 +59,10 @@ function App() {
   const [subscriptions, setSubscriptions] = useState<Track[]>(() => loadFromStorage<Track[]>('yt_subscriptions', []));
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
+  const [externalRecommendations, setExternalRecommendations] = useState<boolean>(() => loadFromStorage<boolean>('external_recommendations', false));
+  const [recommended, setRecommended] = useState<Track[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [recommendationsNote, setRecommendationsNote] = useState<string | null>(null);
   const [radioArtist, setRadioArtist] = useState('');
   const [radioSeed, setRadioSeed] = useState('');
   const [radioLoading, setRadioLoading] = useState(false);
@@ -86,6 +91,10 @@ function App() {
   useEffect(() => {
     saveToStorage('liked_songs', liked);
   }, [liked]);
+
+  useEffect(() => {
+    saveToStorage('external_recommendations', externalRecommendations);
+  }, [externalRecommendations]);
 
   useEffect(() => {
     saveToStorage('downloads', downloads);
@@ -198,6 +207,43 @@ function App() {
       setTrending(results);
     }
   };
+
+  // The magic "if" in action: one saved switch decides which
+  // recommendation engine runs. Off = Unbound's own mix from liked,
+  // saved, and recent tracks, computed instantly with no network call.
+  // On = YouTube-style picks scored from recently played artists.
+  // It never touches search, and it never replaces the playing queue
+  // until the listener taps a recommendation.
+  const loadRecommendedTracks = async (): Promise<void> => {
+    setRecommendationsNote(null);
+    setRecommendationsLoading(true);
+    try {
+      const recent = queue.slice(0, 5);
+      const tracks = await getRecommendedTracks({
+        externalRecommendations,
+        liked,
+        saved: downloads,
+        recent,
+        excludeIds: new Set(queue.map((item) => item.id)),
+      });
+      setRecommended(tracks);
+      if (tracks.length === 0) {
+        setRecommendationsNote('Like or save a few tracks first, then recommendations will have something to build from.');
+      } else if (externalRecommendations && recent.length === 0) {
+        setRecommendationsNote('No recent plays yet, so this is Unbound\'s own mix for now.');
+      }
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  };
+
+  // Refresh recommendations when the switch flips, not on every
+  // queue change, so flipping it feels instant for the own mix and
+  // deliberate for the external fetch.
+  useEffect(() => {
+    void loadRecommendedTracks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalRecommendations]);
 
   const handleSearch = async (): Promise<void> => {
     const query = searchTerm.trim();
@@ -388,6 +434,34 @@ function App() {
                 <button type="button" className="link-button" onClick={() => void loadTrendingTracks()}>Refresh</button>
               </div>
               {renderTrackList(trending, 'trending')}
+            </section>
+
+            <section className="panel">
+              <div className="section-header">
+                <h2>✨ Recommended for you</h2>
+                <button type="button" className="link-button" onClick={() => void loadRecommendedTracks()} disabled={recommendationsLoading}>
+                  {recommendationsLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+              <div className="import-card">
+                <button
+                  type="button"
+                  className="primary-button"
+                  aria-pressed={externalRecommendations}
+                  onClick={() => setExternalRecommendations((value) => !value)}
+                >
+                  External recommendations: {externalRecommendations ? 'On' : 'Off'}
+                </button>
+                <p>
+                  {externalRecommendations
+                    ? 'On: YouTube-style picks, scored from what you played recently.'
+                    : 'Off: Unbound\'s own mix, from your liked, saved, and recent tracks.'}
+                  {' '}Search is not affected by this switch, and your queue only changes if you tap a recommendation.
+                </p>
+                {recommendationsNote ? <p>{recommendationsNote}</p> : null}
+              </div>
+              <div className="spacer" />
+              {recommended.length > 0 ? renderTrackList(recommended, 'recommended') : null}
             </section>
 
             <section className="panel">
