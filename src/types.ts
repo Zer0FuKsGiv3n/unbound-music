@@ -1,4 +1,4 @@
-export type TabKey = 'home' | 'search' | 'youtube' | 'spotify' | 'liked' | 'downloads' | 'queue' | 'import';
+export type TabKey = 'home' | 'search' | 'youtube' | 'spotify' | 'liked' | 'downloads' | 'queue' | 'import' | 'radio';
 
 export type Track = {
   id: string;

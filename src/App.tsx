@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Route, Switch, useLocation } from 'wouter';
 import { loadFromStorage, saveToStorage } from './lib/storage';
-import { fetchSearchResults, fetchTrending, fetchPlaylistTracks, fetchSubscriptions, fetchUserPlaylists } from './lib/youtube';
+import { fetchArtistRadioTracks, fetchSearchResults, fetchTrending, fetchPlaylistTracks, fetchSubscriptions, fetchUserPlaylists } from './lib/youtube';
+import { createYouTubePlayer, describeYouTubeError, YouTubePlayerStates } from './lib/youtubePlayer';
+import type { YouTubePlayerInstance } from './lib/youtubePlayer';
 import type { PlaylistItem, TabKey, Track } from './types';
 
 const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
@@ -12,6 +14,7 @@ const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: 'liked', label: 'Liked', icon: '❤️' },
   { key: 'downloads', label: 'Saved', icon: '⬇️' },
   { key: 'queue', label: 'Queue', icon: '🎶' },
+  { key: 'radio', label: 'Radio', icon: '📻' },
   { key: 'import', label: 'Import', icon: '📥' },
 ];
 
@@ -53,6 +56,17 @@ function App() {
   const [channelId, setChannelId] = useState<string>(() => loadFromStorage<string>('yt_channel_id', ''));
   const [playlists, setPlaylists] = useState<PlaylistItem[]>(() => loadFromStorage<PlaylistItem[]>('yt_playlists', []));
   const [subscriptions, setSubscriptions] = useState<Track[]>(() => loadFromStorage<Track[]>('yt_subscriptions', []));
+  const [playerError, setPlayerError] = useState<string | null>(null);
+  const [playerReady, setPlayerReady] = useState(false);
+  const [radioArtist, setRadioArtist] = useState('');
+  const [radioSeed, setRadioSeed] = useState('');
+  const [radioLoading, setRadioLoading] = useState(false);
+  const [radioError, setRadioError] = useState<string | null>(null);
+  const radioReplenishingRef = useRef(false);
+  const radioLastReplenishedForRef = useRef<string | null>(null);
+  const youtubePlayerRef = useRef<YouTubePlayerInstance | null>(null);
+  const youtubeContainerRef = useRef<HTMLDivElement | null>(null);
+  const playNextRef = useRef<() => void>(() => {});
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -93,6 +107,91 @@ function App() {
     saveToStorage('yt_subscriptions', subscriptions);
   }, [subscriptions]);
 
+  // Real playback: a visible YouTube IFrame player, not just a play/pause
+  // flag. The player instance persists across tracks; only the video ID
+  // changes. No ads, tracking, or monetisation code is added here.
+  useEffect(() => {
+    if (!currentTrack || currentTrack.source !== 'youtube') {
+      youtubePlayerRef.current?.stopVideo();
+      if (currentTrack) {
+        setPlaying(false);
+      }
+      return;
+    }
+
+    setPlayerError(null);
+    let cancelled = false;
+    const container = youtubeContainerRef.current;
+    if (!container && !youtubePlayerRef.current) {
+      return;
+    }
+
+    const setup = async (): Promise<void> => {
+      try {
+        if (youtubePlayerRef.current) {
+          youtubePlayerRef.current.loadVideoById(currentTrack.id);
+          return;
+        }
+        if (!container) {
+          return;
+        }
+        const player = await createYouTubePlayer(container, currentTrack.id, {
+          onReady: () => {
+            if (!cancelled) {
+              setPlayerReady(true);
+            }
+          },
+          onStateChange: (state) => {
+            if (state === YouTubePlayerStates.ENDED) {
+              playNextRef.current();
+            } else if (state === YouTubePlayerStates.PLAYING || state === YouTubePlayerStates.BUFFERING) {
+              setPlaying(true);
+            } else if (state === YouTubePlayerStates.PAUSED) {
+              setPlaying(false);
+            }
+          },
+          onError: (code) => {
+            setPlayerError(describeYouTubeError(code));
+            setPlaying(false);
+          },
+        });
+        if (cancelled) {
+          player.destroy();
+          return;
+        }
+        youtubePlayerRef.current = player;
+      } catch (error) {
+        if (!cancelled) {
+          setPlayerError(error instanceof Error ? error.message : 'Could not start YouTube playback.');
+        }
+      }
+    };
+
+    void setup();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack]);
+
+  useEffect(() => {
+    const player = youtubePlayerRef.current;
+    if (!player || !playerReady || !currentTrack || currentTrack.source !== 'youtube') {
+      return;
+    }
+    if (playing) {
+      player.playVideo();
+    } else {
+      player.pauseVideo();
+    }
+  }, [playing, playerReady, currentTrack]);
+
+  useEffect(() => {
+    return () => {
+      youtubePlayerRef.current?.destroy();
+      youtubePlayerRef.current = null;
+    };
+  }, []);
+
   const loadTrendingTracks = async (): Promise<void> => {
     const results = await fetchTrending();
     if (results.length > 0) {
@@ -125,6 +224,28 @@ function App() {
     setLocation('/youtube');
   };
 
+  const startRadio = async (): Promise<void> => {
+    const seed = radioArtist.trim();
+    if (!seed || radioLoading) return;
+    setRadioError(null);
+    setRadioLoading(true);
+    try {
+      const tracks = await fetchArtistRadioTracks(seed, new Set());
+      if (tracks.length === 0) {
+        setRadioError(`No tracks found for "${seed}". Try another artist spelling.`);
+        return;
+      }
+      setRadioSeed(seed);
+      radioLastReplenishedForRef.current = null;
+      setQueue(tracks);
+      setCurrentTrack(tracks[0] ?? null);
+      setPlaying(true);
+      setLocation('/radio');
+    } finally {
+      setRadioLoading(false);
+    }
+  };
+
   const toggleLike = (track: Track): void => {
     setLiked((current) => {
       const exists = current.some((item) => item.id === track.id);
@@ -147,6 +268,41 @@ function App() {
     const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % queue.length : 0;
     setCurrentTrack(queue[nextIndex] ?? currentTrack);
   };
+
+  useEffect(() => {
+    playNextRef.current = playNext;
+  });
+
+  // Artist radio replenishment: when the listener is near the end of a
+  // radio queue, fetch more tracks for the same seed, excluding anything
+  // already in the queue, so radio can keep going instead of stopping
+  // after the first batch. Guarded so one track triggers at most one fetch.
+  useEffect(() => {
+    if (!radioSeed || !currentTrack || radioReplenishingRef.current) {
+      return;
+    }
+    const currentIndex = queue.findIndex((item) => item.id === currentTrack.id);
+    if (currentIndex < 0 || queue.length - currentIndex > 5) {
+      return;
+    }
+    if (radioLastReplenishedForRef.current === currentTrack.id) {
+      return;
+    }
+    radioReplenishingRef.current = true;
+    radioLastReplenishedForRef.current = currentTrack.id;
+    const replenish = async (): Promise<void> => {
+      try {
+        const existing = new Set(queue.map((item) => item.id));
+        const more = await fetchArtistRadioTracks(radioSeed, existing);
+        if (more.length > 0) {
+          setQueue((current) => [...current, ...more]);
+        }
+      } finally {
+        radioReplenishingRef.current = false;
+      }
+    };
+    void replenish();
+  }, [currentTrack, queue, radioSeed]);
 
   const playPrevious = (): void => {
     if (!currentTrack || queue.length === 0) return;
@@ -319,6 +475,39 @@ function App() {
             </section>
           </Route>
 
+          <Route path="/radio">
+            <section className="panel">
+              <h2>📻 Artist Radio</h2>
+              <div className="import-card">
+                <label htmlFor="radio-input">Artist</label>
+                <input
+                  id="radio-input"
+                  value={radioArtist}
+                  onChange={(event) => setRadioArtist(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      void startRadio();
+                    }
+                  }}
+                  placeholder="e.g. Fleetwood Mac"
+                />
+                <button type="button" className="primary-button" onClick={() => void startRadio()} disabled={radioLoading}>
+                  {radioLoading ? 'Starting radio…' : 'Start Radio'}
+                </button>
+                <p>
+                  Simulated radio, not official YouTube Radio: a continuous, shuffled queue
+                  built from YouTube search for this artist, replenished as it plays.
+                  No downloads, no ad stripping — playback is the visible YouTube player.
+                </p>
+                {radioError ? <p>{radioError}</p> : null}
+                {radioSeed ? <p>Now playing radio for: {radioSeed}</p> : null}
+              </div>
+              <div className="spacer" />
+              <h2>Up next on this station</h2>
+              {renderTrackList(queue, 'radio')}
+            </section>
+          </Route>
+
           <Route path="/import">
             <section className="panel">
               <h2>📥 Import</h2>
@@ -342,6 +531,11 @@ function App() {
           </Route>
         </Switch>
       </main>
+
+      <div className={`now-playing-video ${currentTrack?.source === 'youtube' ? 'visible' : ''}`}>
+        <div ref={youtubeContainerRef} className="youtube-player" />
+        {playerError ? <div className="player-error">{playerError}</div> : null}
+      </div>
 
       <div className={`player-bar ${currentTrack ? 'visible' : ''}`} onClick={() => setLocation('/queue')}>
         <img src={currentTrack?.thumb ?? ''} alt={currentTrack?.title ?? 'Track art'} className="player-art" />
