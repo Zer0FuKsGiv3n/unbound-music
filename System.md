@@ -1,164 +1,215 @@
 # System.md — Unbound Music Architecture
 
-## Project Purpose & Philosophy
+This is the single source of truth for Unbound Music. If a future
+partner, including Copilot or Muse, needs to pick this app up without
+Daniel re-explaining everything, start here. This file replaces the
+old `bootstrap.md` autonomous-bootstrap plan, which was audited on
+2026-10-24 and dropped: its useful failsafe ideas are distilled below,
+and its autonomous, self-merging loop is not used. See “Working model”
+below.
 
-**Unbound Music** is a zero-auth, zero-backend Progressive Web App (PWA) that streams free music powered by YouTube. It prioritizes user privacy, offline capability, and autonomy — no login required, no tracking, no ads.
+## Project purpose & philosophy
 
-- **User Control**: Full client-side execution. User data lives in their browser only.
-- **Zero Dependencies**: No backend, no database, no third-party authentication.
-- **Accessibility**: Works offline after first load. Installable on any device.
+**Unbound Music** is Daniel's personal music player. It is for him
+alone, to enjoy without the ridiculousness of most streaming
+services: no worry about money, and no constant barrage of ads.
 
-## Architecture Overview
+- **Personal only.** Not a product, not monetised, not for distribution.
+- **Free / ad-free from the app itself, forever.** The app must never
+  charge, show its own ads, add a paywall, or add tracking.
+- **Music as therapy.** Daniel listens any time he gets the chance.
+  The app must let him search for a song, artist, playlist, or artist
+  radio and effortlessly listen as long as he wants, without crashing
+  his device.
+- **Browser first.** Daniel mostly uses a Samsung Galaxy A16 5G on
+  Metro by T-Mobile. The preference is a browser app (PWA); a
+  full-stack app is only an option if it is actually needed for elite
+  execution.
+- **Original, not a clone.** Borrow proven mechanisms that work, never
+  another app's identity. Do not settle for a Musify clone, and do not
+  let the app become one by copying features for their own sake.
+  Fall in love with what works.
 
-### Frontend Stack
-- **Framework**: React 18+ (Strict Mode)
-- **Language**: TypeScript (Strict Mode enforced)
-- **Build Tool**: Vite
-- **Routing**: Wouter (lightweight, no `react-router-dom`)
-- **PWA**: `vite-plugin-pwa` for offline support and installation
+## Working model — read this before any autonomous idea
 
-### Data Model
-- **Storage**: IndexedDB (primary) + localStorage (small metadata)
-- **Music Source**: YouTube iframe API (no API key exposure to user)
-- **Import**: Spotify (YourLibrary.json), YouTube (channel ID)
+- **Partner-led, not autonomous.** Daniel directs, the partner builds,
+  Daniel approves, then a push to main happens. There is no
+  self-generating task loop, no self-review, and no auto-merge.
+- **Approval before push.** Work goes straight to main only after
+  Daniel's approval for that push, subject to the normal write-approval
+  tap. A general go-ahead does not bypass that tap.
+- **Small, incremental steps.** One proven mechanism at a time, tested
+  before the next. Do not grow the code exponentially to chase an idea.
+- **Plain language.** Daniel is learning code syntax and lingo.
+  Explain code in plain words, and explain unfamiliar terms.
 
-### Key Components
-```
-index.html (shell + inline styles + vanilla JS player)
-├── Topbar (title, greeting, search/import icons)
-├── Tab Strip (home, search, youtube, spotify, liked, downloads, queue, import)
-├── Content Area (scrollable views)
-├── Mini Player (fixed above bottom nav)
-├── Full Player (fullscreen, queue panel)
-├── Bottom Navigation (home, search, liked, youtube, import)
-└── YouTube Player (hidden iframe)
-```
+## Architecture overview — as it actually is on main
 
-### Authentication & Security
-- **Zero Auth**: No user login, no session tokens.
-- **API Key**: YouTube API key is embedded in `index.html` — **DO NOT expose in client code in production**. Consider using a proxy for production.
-- **Data Privacy**: All user data (liked songs, queue, downloads) stored locally in IndexedDB.
+### Frontend stack
+- **Framework:** React 18, functional components with hooks
+- **Language:** TypeScript, strict mode
+- **Build tool:** Vite 5 (a Dependabot Vite 5 → 8 bump exists as a
+  separate PR; test it alone, do not bundle it with features)
+- **Routing:** Wouter
+- **PWA:** `vite-plugin-pwa` for app-shell caching and installation
 
-## Coding Standards & Style Rules
+### Current state (main, 2026-10-24, after the magic-if push)
+- Real YouTube IFrame playback, with play/pause sync, next/previous,
+  ended advances to next, and plain errors for unavailable or
+  non-embeddable videos.
+- A compact, still-visible YouTube player dock above the mini player
+  while playing. Audio-first UI, never hidden, never audio-ripped.
+- Artist radio: a shuffled, de-duplicated queue, replenished when
+  within 5 tracks of the end. Simulated radio, not official
+  YouTube Radio.
+- Search no longer wipes the playing or saved queue. Tapping a search
+  result, opening a playlist, or starting radio changes the queue
+  only on that explicit choice.
+- Recommended for you on Home, with the “magic if”: one saved switch,
+  External recommendations On/Off. Off is Unbound's own instant mix
+  from liked, saved, and recent tracks. On is YouTube-style picks
+  scored from recently played artists, with a fallback to the own mix.
+  Search is untouched by that switch.
+- Tabs: Home, Search, YouTube, Spotify, Liked, Saved, Queue, Radio,
+  Import. Most of the app is still in `src/App.tsx`, with
+  `src/lib/youtube.ts`, `src/lib/youtubePlayer.ts`,
+  `src/lib/recommendations.ts`, `src/lib/storage.ts`, and
+  `src/types.ts`. Splitting App.tsx into components/hooks is future
+  work, not a current fact.
 
-### TypeScript
-- **Strict Mode**: Always enabled. No `any` without justification.
-- **Naming**: camelCase for variables/functions, PascalCase for types/classes.
-- **Imports**: Use ES modules. Avoid circular dependencies.
-- **Error Handling**: Wrap async operations in try-catch. Never let promises reject silently.
+### Data model — as it actually is
+- `Track { id, title, artist, thumb, source: 'youtube' | 'spotify' | 'local' }`
+- `PlaylistItem { id, title, itemCount? }`
+- Storage today is **localStorage**, not IndexedDB: `liked_songs`,
+  `downloads`, `queue`, `yt_channel_id`, `yt_playlists`,
+  `yt_subscriptions`, `external_recommendations`.
+- “Downloads” / Saved today is a saved list, not a downloaded file.
+  There is no offline audio cache yet. The PWA caches the app shell;
+  do not claim offline listening works until it is actually tested.
+- YouTube search today goes through a temporary Base44 proxy
+  (`VITE_YOUTUBE_PROXY_URL` can override it). Base44 only helped go
+  from thought to tangible; treat it as temporary scaffolding, not
+  the foundation. Its exact replacement has not been chosen yet.
+  Search, playlists, playlist items, and subscriptions are the proxy
+  endpoints in use; there is no related-videos endpoint, which is why
+  external recommendations are approximated with artist-radio search.
 
-### React Component Conventions
-- **Functional Components**: Only use functional components with hooks.
-- **Hooks**: `useState`, `useContext`, `useEffect`, `useCallback`, `useMemo` as needed.
-- **Props**: Destructure props at the function signature.
-- **No Prop Drilling**: Use Context for global state (e.g., player state, liked songs).
+### Search and metadata — what is allowed
+- **YouTube:** searchable and playable through official visible
+  embeds. No ripping, no downloads, no hidden/background-only player,
+  no ad stripping, no scraping or circumvention, no redistribution
+  or monetisation. This is general information, not legal advice.
+- **Spotify:** metadata/search only in Unbound's own player is the
+  safe pattern discussed; full Spotify playback cannot be moved into
+  Unbound's player, and cannot bypass Premium. No Spotify metadata
+  source has been agreed or implemented yet — do not assume one.
+- **Search experience to match:** one search box, automatic and
+  instant, there or not, with a clear found / not-found result.
+  Source toggles must not be a daily user task; they belong, at most,
+  in a troubleshooting setting.
+- **YouTube videos themselves are outside the app's control.** The
+  app cannot guarantee YouTube itself never shows an ad on a specific
+  creator video. Do not promise otherwise, and do not strip ads to
+  try to fix it.
 
-### Code Organization
-- `/src/components/` — Reusable UI components
-- `/src/hooks/` — Custom hooks (usePlayer, useLikedSongs, etc.)
-- `/src/utils/` — Utilities (time formatting, local storage helpers)
-- `/src/types/` — Shared TypeScript types
-- `/src/App.tsx` — Root component
-- `/src/main.tsx` — Entry point
+## Coding standards & style rules
 
-### CSS & Styling
-- **Approach**: CSS Modules or inline styles (no Tailwind — keep bundle small for PWA).
-- **Design Tokens**: Use CSS variables for colors, spacing, typography.
-- **Mobile-First**: All layouts optimized for touch and mobile screens.
-- **Accessibility**: Semantic HTML, ARIA labels, high contrast.
+- **TypeScript strict.** No `any` without justification. Every edit
+  must pass `npx tsc --noEmit` with zero errors, and `npm run build`
+  must pass, before marking work complete.
+- **Naming:** camelCase for variables/functions, PascalCase for
+  types/classes.
+- **Imports:** ES modules. Avoid circular dependencies.
+- **Error handling:** Wrap async work in try-catch where it matters.
+  Do not let promises reject silently, and do not return a silent
+  empty list where the user needs a loading/error distinction.
+- **No hallucinated libraries.** Do not import or use a library that
+  is not in `package.json`.
+- **Scope isolation.** Before editing, search the codebase to
+  understand dependencies and impact.
+- **Bundle honesty.** The old “100 kB of JS is the hard limit” was an
+  aspiration, not a fact: the build was 163.88 kB JS after the
+  magic-if push. Keep the bundle lean and report its real size;
+  do not block a working feature to chase 100 kB, and do not claim
+  100 kB when the build says otherwise.
+- **Mobile-first, dark, touch-friendly.** Dark indigo UI, large hit
+  areas, semantic HTML and ARIA labels where they help. No light
+  mode is required.
 
-### Testing
-- **Framework**: Vitest or Jest
-- **Coverage**: Unit tests for utilities and hooks, component tests for complex logic.
-- **No E2E in CI**: Avoid YouTube iframe testing in automated pipelines.
+## UX & UI principles
 
-## UX & UI Principles
+- **Playback quality over feature count.** One solid player beats
+  ten broken features.
+- **Instant feedback.** Do not wait for network or player ready to
+  update the UI where a local answer is available.
+- **Queue honesty.** Recently Played is not just `queue.slice(0, 5)`
+  by design, even though that is the current shortcut — note it as
+  a known shortcut, not as true history, when it matters.
+- **Core flows:** Discovery on Home → play; Search → results → play
+  on explicit tap; Radio → artist seed → continuous queue;
+  Like/Save → Liked/Saved lists; Import → YouTube channel ID today,
+  Spotify `YourLibrary.json` import is still dead UI, not a working
+  feature — do not present it as working.
+- **Empty and error states:** Say plainly what is missing and what
+  to do next, instead of showing a blank list.
 
-### Design Philosophy
-- **Minimal & Dark**: Dark indigo background, vibrant accent colors (cyan, pink).
-- **Mobile-Centric**: Touch-friendly buttons (min 44×44px), large hit areas.
-- **Fast Feedback**: Instant UI updates; don't wait for network or player ready.
-- **Gesture-Driven**: Swipe to close player, tap to play, long-press for context menu (future).
+## Compatibility and stability rules
 
-### Core Flows
-1. **Discovery** → Home tab (trending, recent) → Play track
-2. **Search** → Search tab → Search input → Results → Play
-3. **Import** → Import tab → Upload Spotify JSON or enter YouTube Channel ID → Load library
-4. **Playback** → Mini player (above nav) → Full player (swipe up)
-5. **Curation** → Like/Unlike (❤️/🤍) → Download for offline (⬇️)
+Do not break, without an explicit decision from Daniel:
+- The `Track` and `PlaylistItem` shapes above.
+- The localStorage keys above.
+- The queue rules: search and browsing never replace the queue;
+  only an explicit tap, playlist open, or radio start does.
+- The visible-player rule and the no-ripping / no-ad-stripping rules.
+- Wouter routing. Do not switch to `react-router-dom` casually.
+- TypeScript strict mode.
 
-### Colors & Tokens
-```
---ind:     #1A0A2E (Indigo, dark background)
---ind-m:   #2D1B4E (Indigo medium, cards)
---ind-l:   #3D2660 (Indigo light, borders)
---bb:      #7EC8E3 (Baby Blue, primary accent)
---pk:      #FF2D78 (Pink, secondary accent, active state)
---txt:     #F0E6FF (Text, light purple)
---muted:   #9B86BD (Muted, secondary text)
---card:    #231242 (Card background)
-```
+## Task template — use this shape when a real task needs it
 
-### Components & Patterns
-- **Track Item**: Thumbnail + title + artist + action buttons (like, download)
-- **Mini Player**: Floating bar above bottom nav with play/prev/next controls
-- **Full Player**: Fullscreen with album art, progress bar, queue sidebar
-- **Empty States**: Friendly icons + explanation text
-- **Loading**: Spinner + message
-- **Toasts**: Top-center notifications (2s auto-dismiss)
+Do not create empty template folders. When a task is real, write it
+down in this shape, in the conversation or in a commit message:
+- **Goal:** What Daniel will be able to do when this is done.
+- **Constraints:** Free/ad-free from the app, legal visible embeds,
+  approval before push, browser-first on the Galaxy A16.
+- **Acceptance criteria:** What Daniel can check on his phone.
+- **Test expectations:** `tsc --noEmit` clean, build passes, and the
+  phone check above where it applies.
+- **References:** This file, and the specific code being changed.
 
-## Autonomy Rules & Constraints
+## Forbidden actions
 
-### Copilot Directives
-1. **Action-First**: Do not ask unnecessary questions. If a fix is safe and solves the stated problem, apply it.
-2. **Type Safety First**: Every file edit must pass `npx tsc --noEmit` with zero errors before marking complete.
-3. **No Hallucination**: Do not import or use libraries not in `package.json`.
-4. **Scope Isolation**: Before editing, search the codebase to understand dependencies and impact.
-5. **Testing Required**: After major changes, verify the app builds and runs.
-6. **Read Context First**: Check `Context/` files before proposing architectural changes.
-7. **Respect Compatibility**: Do not break API shapes or data models listed in `Compatibility.md`.
+- Never expose an API key or password in chat, in a commit, or in
+  client code. Keys go through a secure flow, never in chat.
+- Never add external analytics or tracking.
+- Never hide the YouTube player, rip audio, download YouTube audio,
+  or strip ads.
+- Never charge, add a paywall, or add the app's own ads.
+- Never remove TypeScript strict mode.
+- Never turn on an autonomous loop, auto-review, or auto-merge.
+- Never deploy or claim a deployment that has not been verified.
+- Never present a dead UI (Spotify import today) as a working feature.
 
-### Forbidden Actions
-- **Never expose the API key** to the public or in version control commits.
-- **Never use backend services** — all execution must be client-side.
-- **Never add external analytics or tracking** — privacy is core.
-- **Never use `react-router-dom`** — Wouter only.
-- **Never remove TypeScript Strict Mode**.
-- **Never deploy to production without testing offline mode**.
+## Deployment model
 
-### Deployment Model
-- **Personal-Only PWA**: Installed on Danny's devices only.
-- **No Cloud Storage**: No user data sent to servers (except YouTube API calls).
-- **No CI/CD Required**: Manual build and deploy to personal server.
+- **Personal-only PWA.** Daniel's devices only.
+- **No cloud storage of user data** except YouTube API calls through
+  the temporary proxy above.
+- **No CI/CD required.** Manual build and approval before push.
 
-## Personal Preferences (Danny)
+## Maintenance notes
 
-- **Code Style**: Concise, readable, no over-engineering. Small utilities > large frameworks.
-- **Performance**: Fast load, minimal bundle size. 100kB of JS is the hard limit.
-- **Dark Mode**: Always. No light mode option.
-- **Music Priority**: Playback quality > feature count. One solid player > ten broken features.
-- **Privacy First**: User data never leaves the device.
-- **Offline First**: App must work without internet after cache warms.
-
-## Maintenance & Evolution
-
-### Monthly Tasks
-- Check for dependency updates (careful with major versions).
-- Review offline cache hit rate in analytics (if future analytics added).
-- Refresh API keys if they expire or leak.
-
-### Quarterly Reviews
-- User feedback on playback reliability.
-- Performance profiling (bundle size, FCP, LCP).
-- Accessibility audit (keyboard nav, screen reader).
-
-### Deprecation Policy
-- Old API versions: Support 2 versions back.
-- Breaking changes: Document in `CoreChanges/`.
-- Removed features: Add migration note in `CoreChanges/`.
+- Check dependency updates carefully, especially major versions.
+  Test the Vite 8 Dependabot PR alone.
+- Do not claim analytics, offline-audio, or cache-hit data that does
+  not exist. There is no analytics in the app today.
+- Breaking changes: document them in the commit message and update
+  this file in the same change, so this file does not go stale again.
 
 ---
 
-**Last Updated**: 2026-09-27  
-**Maintainer**: Danny (Zer0FuKsGiv3n)  
-**Status**: Active Development
+**Last updated:** 2026-10-24
+**Maintainer:** Daniel (Zer0FuKsGiv3n)
+**Status:** Active development — partner-led, approval before push.
+**Supersedes:** `bootstrap.md` (audited and removed 2026-10-24; its
+failsafe ideas are distilled here, its autonomous loop is dropped.
+Git history still holds the old file if it is ever needed for reference.)
