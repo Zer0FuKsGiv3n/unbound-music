@@ -60,6 +60,16 @@ function App() {
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [externalRecommendations, setExternalRecommendations] = useState<boolean>(() => loadFromStorage<boolean>('external_recommendations', false));
+  // End-of-queue rule, made explicit so Unbound can never sit in a
+  // Musify-style "completed but nowhere to go" state. Repeat On (the
+  // previous, silent behaviour, now visible and saved) loops the queue.
+  // Repeat Off ends in one clean, visible finished state: playing stops,
+  // the last track stays on screen, and Play restarts from the first
+  // track. No end-of-queue step ever depends on a network fetch.
+  const [repeatQueue, setRepeatQueue] = useState<boolean>(() => loadFromStorage<boolean>('repeat_queue', true));
+  const [queueEnded, setQueueEnded] = useState(false);
+  const consecutiveErrorsRef = useRef(0);
+  const awaitingRadioRefillRef = useRef(false);
   const [recommended, setRecommended] = useState<Track[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [recommendationsNote, setRecommendationsNote] = useState<string | null>(null);
@@ -72,6 +82,10 @@ function App() {
   const youtubePlayerRef = useRef<YouTubePlayerInstance | null>(null);
   const youtubeContainerRef = useRef<HTMLDivElement | null>(null);
   const playNextRef = useRef<() => void>(() => {});
+  // The YouTube player is created once, so its callbacks would otherwise
+  // keep the very first render's logic. These refs keep them current,
+  // the same way playNextRef already does for track endings.
+  const playbackErrorRef = useRef<(code: number) => void>(() => {});
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -95,6 +109,10 @@ function App() {
   useEffect(() => {
     saveToStorage('external_recommendations', externalRecommendations);
   }, [externalRecommendations]);
+
+  useEffect(() => {
+    saveToStorage('repeat_queue', repeatQueue);
+  }, [repeatQueue]);
 
   useEffect(() => {
     saveToStorage('downloads', downloads);
@@ -154,14 +172,14 @@ function App() {
             if (state === YouTubePlayerStates.ENDED) {
               playNextRef.current();
             } else if (state === YouTubePlayerStates.PLAYING || state === YouTubePlayerStates.BUFFERING) {
+              consecutiveErrorsRef.current = 0;
               setPlaying(true);
             } else if (state === YouTubePlayerStates.PAUSED) {
               setPlaying(false);
             }
           },
           onError: (code) => {
-            setPlayerError(describeYouTubeError(code));
-            setPlaying(false);
+            playbackErrorRef.current(code);
           },
         });
         if (cancelled) {
@@ -265,6 +283,10 @@ function App() {
 
   const openPlaylist = async (playlistId: string, title: string): Promise<void> => {
     const tracks = await fetchPlaylistTracks(playlistId, title);
+    // A playlist is not radio, so its queue must not be refilled with
+    // tracks from a previous radio station when it nears its end.
+    setRadioSeed('');
+    setQueueEnded(false);
     setQueue(tracks);
     setLocation('/youtube');
   };
@@ -282,6 +304,9 @@ function App() {
       }
       setRadioSeed(seed);
       radioLastReplenishedForRef.current = null;
+      awaitingRadioRefillRef.current = false;
+      setQueueEnded(false);
+      setPlayerError(null);
       setQueue(tracks);
       setCurrentTrack(tracks[0] ?? null);
       setPlaying(true);
@@ -307,15 +332,68 @@ function App() {
     });
   };
 
+  // One clean finished state, never a "completed but stuck" state.
+  const finishQueue = (): void => {
+    awaitingRadioRefillRef.current = false;
+    youtubePlayerRef.current?.stopVideo();
+    setPlaying(false);
+    setQueueEnded(true);
+  };
+
   const playNext = (): void => {
     if (!currentTrack || queue.length === 0) return;
+    // From the finished state, Next is a restart, not another finish.
+    if (queueEnded) {
+      setQueueEnded(false);
+      setCurrentTrack(queue[0] ?? currentTrack);
+      setPlaying(true);
+      return;
+    }
     const currentIndex = queue.findIndex((item) => item.id === currentTrack.id);
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % queue.length : 0;
-    setCurrentTrack(queue[nextIndex] ?? currentTrack);
+    if (currentIndex < 0) {
+      setCurrentTrack(queue[0] ?? currentTrack);
+      return;
+    }
+    if (currentIndex < queue.length - 1) {
+      setCurrentTrack(queue[currentIndex + 1] ?? currentTrack);
+      return;
+    }
+    // Last track. Never fetch a next track here: that is exactly the
+    // Musify failure mode, a background network call at the moment of
+    // completion with no guaranteed answer. Radio is the one exception,
+    // and only when its refill is already in flight: wait for that
+    // already-started result instead of finishing or wrapping early.
+    if (radioSeed && radioReplenishingRef.current) {
+      awaitingRadioRefillRef.current = true;
+      return;
+    }
+    if (repeatQueue) {
+      setCurrentTrack(queue[0] ?? currentTrack);
+      return;
+    }
+    finishQueue();
+  };
+
+  // An unplayable track must not stop the whole queue dead, the way a
+  // single error stops Musify when it has nowhere to go. Skip it, but
+  // count consecutive failures: if every track in the queue fails in a
+  // row, stop cleanly with a message instead of looping through errors
+  // forever.
+  const handlePlaybackError = (code: number): void => {
+    consecutiveErrorsRef.current += 1;
+    if (queue.length === 0 || consecutiveErrorsRef.current >= queue.length) {
+      setPlayerError('None of the tracks in this queue could be played. Pick another track to try again.');
+      finishQueue();
+      return;
+    }
+    setPlayerError(describeYouTubeError(code));
+    setPlaying(true);
+    playNext();
   };
 
   useEffect(() => {
     playNextRef.current = playNext;
+    playbackErrorRef.current = handlePlaybackError;
   });
 
   // Artist radio replenishment: when the listener is near the end of a
@@ -341,6 +419,24 @@ function App() {
         const more = await fetchArtistRadioTracks(radioSeed, existing);
         if (more.length > 0) {
           setQueue((current) => [...current, ...more]);
+          if (awaitingRadioRefillRef.current) {
+            awaitingRadioRefillRef.current = false;
+            setQueueEnded(false);
+            setCurrentTrack(more[0] ?? currentTrack);
+            setPlaying(true);
+          }
+        } else if (awaitingRadioRefillRef.current) {
+          // The refill that was already in flight came back empty, so
+          // radio really has run out of new tracks for this artist.
+          // Repeat On loops the existing queue; Repeat Off finishes
+          // cleanly, instead of silently looping when the user said no.
+          awaitingRadioRefillRef.current = false;
+          if (repeatQueue) {
+            setCurrentTrack(queue[0] ?? currentTrack);
+            setPlaying(true);
+          } else {
+            finishQueue();
+          }
         }
       } finally {
         radioReplenishingRef.current = false;
@@ -351,15 +447,49 @@ function App() {
 
   const playPrevious = (): void => {
     if (!currentTrack || queue.length === 0) return;
+    // From the finished state, Previous resumes the track before the
+    // last one (or the only track, if there is just one), so it is
+    // never a dead button on a finished queue.
+    if (queueEnded) {
+      setQueueEnded(false);
+      setCurrentTrack(queue.length > 1 ? (queue[queue.length - 2] ?? currentTrack) : currentTrack);
+      setPlaying(true);
+      return;
+    }
     const currentIndex = queue.findIndex((item) => item.id === currentTrack.id);
     const prevIndex = currentIndex > 0 ? currentIndex - 1 : queue.length - 1;
     setCurrentTrack(queue[prevIndex] ?? currentTrack);
   };
 
   const playFromList = (track: Track, list: Track[]): void => {
+    // A new, non-radio queue ends the radio station: without this, the
+    // old radio seed would silently refill a playlist or search queue
+    // near its end. Tapping inside the current queue (including the
+    // radio queue itself) keeps the seed, because that queue has not
+    // actually changed.
+    if (list !== queue) {
+      setRadioSeed('');
+    }
+    awaitingRadioRefillRef.current = false;
+    consecutiveErrorsRef.current = 0;
+    setPlayerError(null);
+    setQueueEnded(false);
     setQueue(list);
     setCurrentTrack(track);
     setPlaying(true);
+  };
+
+  // From the finished state, the main Play button restarts the queue
+  // from the first track. Replaying an ended video directly would
+  // leave the listener on the last track with no clear next step.
+  const togglePlay = (): void => {
+    if (queueEnded && queue.length > 0) {
+      setQueueEnded(false);
+      setCurrentTrack(queue[0] ?? currentTrack);
+      setPlaying(true);
+      return;
+    }
+    setPlaying((value) => !value);
   };
 
   const isLiked = (track: Track): boolean => liked.some((item) => item.id === track.id);
@@ -542,8 +672,12 @@ function App() {
             <section className="panel">
               <div className="section-header">
                 <h2>🎶 Up next</h2>
-                <button type="button" className="link-button" onClick={() => setQueue([])}>Clear</button>
+                <button type="button" className="link-button" aria-pressed={repeatQueue} onClick={() => setRepeatQueue((value) => !value)}>
+                  Repeat: {repeatQueue ? 'On' : 'Off'}
+                </button>
+                <button type="button" className="link-button" onClick={() => { setQueue([]); setQueueEnded(false); }}>Clear</button>
               </div>
+              {queueEnded ? <p>Queue finished. Tap ▶ to play it again from the start, or pick another track.</p> : null}
               {renderTrackList(queue, 'queue')}
             </section>
           </Route>
@@ -607,7 +741,11 @@ function App() {
 
       <div className={`now-playing-video ${currentTrack?.source === 'youtube' ? 'visible' : ''}`}>
         <div ref={youtubeContainerRef} className="youtube-player" />
-        {playerError ? <div className="player-error">{playerError}</div> : null}
+        {playerError ? <div className="player-error">{playerError}</div> : queueEnded ? (
+          <div className="player-error">
+            {radioSeed ? `Radio ran out of new tracks for ${radioSeed}. Tap ▶ to play this queue again from the start.` : 'Queue finished. Tap ▶ to play it again from the start.'}
+          </div>
+        ) : null}
       </div>
 
       <div className={`player-bar ${currentTrack ? 'visible' : ''}`} onClick={() => setLocation('/queue')}>
@@ -618,7 +756,16 @@ function App() {
         </div>
         <div className="player-actions">
           <button type="button" className="mini-button" onClick={(event) => { event.stopPropagation(); playPrevious(); }}>⏮</button>
-          <button type="button" className="mini-button primary" onClick={(event) => { event.stopPropagation(); setPlaying((value) => !value); }}>
+          <button
+            type="button"
+            className="mini-button"
+            aria-pressed={repeatQueue}
+            title={repeatQueue ? 'Repeat queue: On — the queue loops at the end' : 'Repeat queue: Off — the queue finishes cleanly at the end'}
+            onClick={(event) => { event.stopPropagation(); setRepeatQueue((value) => !value); }}
+          >
+            ↻
+          </button>
+          <button type="button" className="mini-button primary" onClick={(event) => { event.stopPropagation(); togglePlay(); }}>
             {playing ? '⏸' : '▶'}
           </button>
           <button type="button" className="mini-button" onClick={(event) => { event.stopPropagation(); playNext(); }}>⏭</button>
